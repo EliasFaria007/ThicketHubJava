@@ -20,20 +20,28 @@ public class Chamado {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private StatusChamado status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private PrioridadeChamado prioridade;
     private LocalDateTime dataAbertura;
-    @Column(unique = true)
+    private LocalDateTime dataFechamento;
+
+    @Column(unique = true,nullable = false)
     private String protocolo;
-            titulo,
-            descricao,
-            categoria,
-            subcategoria,
-            setorResponsavel,
-            usuarioSolicitante,
-            dataFechamento,
-            filaSetor,
-            setor;
+
+    @Column(nullable = false)
+    private String titulo;
+
+    @Column(columnDefinition = "TEXT", nullable = false)
+    private String descricao;
+
+    private String setor;
+
     @ManyToOne
     private Servico servico;
     @ManyToOne
@@ -41,15 +49,19 @@ public class Chamado {
     @ManyToOne
     private Tecnico tecnico;
     @Version Long versao;
-    private String slaAtendimentoHoras,
-            slaConsumidoMs,
-            slaResolucaoHoras,
-            slaRodandoDesde,
-            primeiraRespostaEm,
-            oQueFoiFeito,
-            resolvidoEm,
-            motivoReabertura,
-            avaliacao;
+
+    private Integer slaAtendimentoHoras;
+    private Long slaConsumidoMs;
+    private Integer slaResolucaoHoras;
+    private LocalDateTime slaRodandoDesde;
+    private LocalDateTime primeiraRespostaEm;
+
+    @Column(columnDefinition = "TEXT")
+    private String oQueFoiFeito;
+
+    private LocalDateTime resolvidoEm;
+    private String motivoReabertura;
+    private Integer avaliacao;
 
     @ElementCollection
     @CollectionTable(name="tb_chamado_comentarios",
