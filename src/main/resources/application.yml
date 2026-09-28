@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: ThicketHub
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /api
+
+jwt:
+  secret: ${JWT_SECRET:9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f}
+  expiration-ms: ${JWT_EXPIRATION_MS:900000}          # 15 minutos
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000} # 7 dias
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
