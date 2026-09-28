@@ -1,10 +1,13 @@
 package thickethub.domain.enums;
 
 public enum StatusChamado {
-    AGUARDANDO,
+    ABERTO,
+    EM_ATENDIMENTO,
     EM_ANDAMENTO,
-    CONCLUIDO,
+    AGUARDANDO,
     PAUSADO,
     RESOLVIDO,
+    CONCLUIDO,
+    FECHADO,
     CANCELADO;
 }

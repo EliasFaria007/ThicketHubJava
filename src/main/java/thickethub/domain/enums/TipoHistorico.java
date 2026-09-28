@@ -4,5 +4,12 @@ public enum TipoHistorico {
     ABERTURA,
     ASSUNCAO,
     STATUS,
-    ENCAMINHAMENTO;
+    ENCAMINHAMENTO,
+    COMENTARIO,
+    PAUSA,
+    RETOMADA,
+    RESOLUCAO,
+    REABERTURA,
+    VINCULO,
+    DEVOLUCAO;
 }

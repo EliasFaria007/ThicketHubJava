@@ -13,13 +13,19 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Table(name = "tb_config_dominio")
 public class ConfigDominio {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, length = 100)
     private String dominio;
 
-    @Column(name= "eh_padrao" ,nullable = false)
-    private Boolean ehPadrao;
+    @Column(name = "eh_padrao", nullable = false)
+    @Builder.Default
+    private Boolean ehPadrao = false;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean ativo = true;
 }

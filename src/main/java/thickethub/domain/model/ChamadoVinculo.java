@@ -12,22 +12,22 @@ import thickethub.domain.enums.TipoVinculo;
 @Data
 @Builder
 @Entity
-@Table(name = "chamado_vinculo")
+@Table(name = "tb_chamado_vinculo")
 public class ChamadoVinculo {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "chamado_origem_id",nullable = false)
+    @JoinColumn(name = "chamado_origem_id", nullable = false)
     private Chamado chamadoOrigem;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "chamado_destino_id",nullable = false)
+    @JoinColumn(name = "chamado_destino_id", nullable = false)
     private Chamado chamadoDestino;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 30)
     private TipoVinculo tipo;
-
 }
