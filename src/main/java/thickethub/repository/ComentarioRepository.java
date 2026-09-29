@@ -7,6 +7,6 @@ import thickethub.domain.model.Comentario;
 import java.util.List;
 
 public interface ComentarioRepository extends JpaRepository<Comentario, Long>, JpaSpecificationExecutor<Comentario> {
-    List<Comentario> findByChamadoIdOrderByDataCriacaoAsc(Long chamadoId);
-    List<Comentario> findByChamadoIdAndFlagInternoFalseOrderByDataCriacaoAsc(Long chamadoId);
+    List<Comentario> findByChamado_IdOrderByDataCriacaoAsc(Long chamadoId);
+    List<Comentario> findByChamado_IdAndFlagInternoFalseOrderByDataCriacaoAsc(Long chamadoId);
 }

@@ -18,7 +18,7 @@ public interface ChamadoService {
     ChamadoDetalheResponse assumirChamado(Usuario tecnico, Long chamadoId);
     ChamadoDetalheResponse pausarChamado(Usuario user, Long chamadoId);
     ChamadoDetalheResponse retomarChamado(Usuario user, Long chamadoId);
-    ChamadoDetalheResponse resolverChamado(Usuario user, Long chamadoId, AtualizarChamadoRequest request);
+    ChamadoDetalheResponse resolverChamado(Usuario user, Long chamadoId, ResolverChamadoRequest request);
     ChamadoDetalheResponse devolverChamado(Usuario user, Long chamadoId, DevolverChamadoRequest request);
     ChamadoDetalheResponse encaminhar(Long id, EncaminharChamadoRequest request);
     ChamadoDetalheResponse reabrirChamado(Usuario user, Long chamadoId, String justificativa);

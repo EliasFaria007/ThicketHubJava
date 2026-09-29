@@ -182,13 +182,19 @@ public class ChamadoServiceImpl implements ChamadoService {
     @Override
     @Transactional
     public ChamadoDetalheResponse assumirChamado(Usuario tecnico, Long chamadoId) {
+        log.info("[CHAMADO ASSUMIR] Técnico '{}' (id={}) tentando assumir chamado id={}",
+                tecnico.getNome(), tecnico.getId(), chamadoId);
+
         Chamado chamado = buscarOuFalhar(chamadoId);
         validarTecnicoDoSetor(tecnico, chamado);
 
         if (chamado.getTecnico() != null) {
+            log.warn("[CHAMADO ASSUMIR] Chamado '{}' já está atribuído ao técnico '{}'",
+                    chamado.getProtocolo(), chamado.getTecnico().getNome());
             throw new ConflictException("Chamado já atribuído a outro técnico.");
         }
         if (chamado.getStatus() != StatusChamado.ABERTO && chamado.getStatus() != StatusChamado.AGUARDANDO) {
+            log.warn("[CHAMADO ASSUMIR] Status inválido — chamado '{}' está como {}", chamado.getProtocolo(), chamado.getStatus());
             throw new BusinessException("Só é possível assumir chamados com status ABERTO ou AGUARDANDO.");
         }
 
@@ -206,6 +212,8 @@ public class ChamadoServiceImpl implements ChamadoService {
         auditar(tecnico, "chamado.assumir", "protocolo=" + chamado.getProtocolo());
         notificarUsuario(chamado.getSolicitante(), chamado, "Seu chamado " + chamado.getProtocolo() + " foi assumido por " + tecnico.getNome());
 
+        log.info("[CHAMADO ASSUMIR] SUCESSO — chamado '{}' assumido pelo técnico '{}' (id={})",
+                chamado.getProtocolo(), tecnico.getNome(), tecnico.getId());
         return ChamadoDetalheResponse.de(chamado);
     }
 
@@ -257,11 +265,14 @@ public class ChamadoServiceImpl implements ChamadoService {
     // ============================================================
     @Override
     @Transactional
-    public ChamadoDetalheResponse resolverChamado(Usuario user, Long chamadoId, AtualizarChamadoRequest request) {
+    public ChamadoDetalheResponse resolverChamado(Usuario user, Long chamadoId, ResolverChamadoRequest request) {
+        log.info("[CHAMADO RESOLVER] Técnico '{}' resolvendo chamado id={}", user.getNome(), chamadoId);
+
         Chamado chamado = buscarOuFalhar(chamadoId);
         validarTecnicoDoSetor(user, chamado);
 
-        if (request.oQueFoiFeito() == null || request.oQueFoiFeito().isBlank()) {
+        if (request == null || request.oQueFoiFeito() == null || request.oQueFoiFeito().isBlank()) {
+            log.warn("[CHAMADO RESOLVER] Tentativa de resolver chamado '{}' sem informar o que foi feito", chamado.getProtocolo());
             throw new BusinessException("É obrigatório registrar o que foi feito para resolver o chamado.");
         }
 
@@ -275,6 +286,8 @@ public class ChamadoServiceImpl implements ChamadoService {
         auditar(user, "chamado.resolver", "protocolo=" + chamado.getProtocolo());
         notificarUsuario(chamado.getSolicitante(), chamado, "Seu chamado " + chamado.getProtocolo() + " foi resolvido. Avalie o atendimento.");
 
+        log.info("[CHAMADO RESOLVER] SUCESSO — chamado '{}' marcado como RESOLVIDO por '{}'",
+                chamado.getProtocolo(), user.getNome());
         return ChamadoDetalheResponse.de(chamado);
     }
 
@@ -439,8 +452,8 @@ public class ChamadoServiceImpl implements ChamadoService {
         boolean isTecnicoOuAdm = usuario.getPapel() != Papel.USUARIO;
 
         List<Comentario> lista = isTecnicoOuAdm
-                ? comentarioRepository.findByChamadoIdOrderByDataCriacaoAsc(chamadoId)
-                : comentarioRepository.findByChamadoIdAndFlagInternoFalseOrderByDataCriacaoAsc(chamadoId);
+                ? comentarioRepository.findByChamado_IdOrderByDataCriacaoAsc(chamadoId)
+                : comentarioRepository.findByChamado_IdAndFlagInternoFalseOrderByDataCriacaoAsc(chamadoId);
 
         return lista.stream().map(ComentarioResponse::de).toList();
     }
@@ -458,7 +471,7 @@ public class ChamadoServiceImpl implements ChamadoService {
             throw new BusinessException("Não é possível vincular um chamado a ele mesmo.");
         }
 
-        if (chamadoVinculoRepository.existsByChamadoOrigemIdAndChamadoDestinoId(origem.getId(), destino.getId())) {
+        if (chamadoVinculoRepository.existsByChamadoOrigem_IdAndChamadoDestino_Id(origem.getId(), destino.getId())) {
             throw new ConflictException("Estes chamados já estão vinculados.");
         }
 
@@ -513,6 +526,8 @@ public class ChamadoServiceImpl implements ChamadoService {
             return;
         }
         if (user.getPapel() != Papel.TECNICO || user.getSetoresLiberados() == null || !user.getSetoresLiberados().contains(chamado.getSetor())) {
+            log.warn("[CHAMADO PERMISSÃO] NEGADO — '{}' (papel={}) sem acesso ao setor '{}' do chamado '{}'",
+                    user.getEmail(), user.getPapel(), chamado.getSetor(), chamado.getProtocolo());
             throw new ForbiddenException("Você não tem permissão para atuar no setor deste chamado.");
         }
     }

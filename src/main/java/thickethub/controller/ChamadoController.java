@@ -56,6 +56,7 @@ public class ChamadoController {
         return ResponseEntity.ok(ApiResponse.sucesso(chamadoService.buscar(id), "Chamado carregado", 200));
     }
 
+    @PreAuthorize("@chamadoSecurity.podeVisualizarPorProtocolo(#protocolo, authentication.name)")
     @GetMapping("/protocolo/{protocolo}")
     public ResponseEntity<ApiResponse<ChamadoDetalheResponse>> buscarPorProtocolo(@PathVariable String protocolo) {
         return ResponseEntity.ok(ApiResponse.sucesso(chamadoService.buscarPorProtocolo(protocolo), "Chamado carregado", 200));
@@ -94,7 +95,7 @@ public class ChamadoController {
     @PostMapping("/{id}/resolver")
     public ResponseEntity<ApiResponse<ChamadoDetalheResponse>> resolver(
             @PathVariable Long id,
-            @Valid @RequestBody AtualizarChamadoRequest request) {
+            @Valid @RequestBody ResolverChamadoRequest request) {
         Usuario tecnico = SecurityUtils.getUsuarioLogado();
         return ResponseEntity.ok(ApiResponse.sucesso(chamadoService.resolverChamado(tecnico, id, request), "Chamado resolvido", 200));
     }
@@ -125,6 +126,7 @@ public class ChamadoController {
         return ResponseEntity.ok(ApiResponse.sucesso(chamadoService.reabrirChamado(admin, id, request.justificativa()), "Chamado reaberto", 200));
     }
 
+    @PreAuthorize("@chamadoSecurity.ehSolicitante(#id, authentication.name)")
     @PostMapping("/{id}/avaliar")
     public ResponseEntity<ApiResponse<ChamadoDetalheResponse>> avaliar(
             @PathVariable Long id,

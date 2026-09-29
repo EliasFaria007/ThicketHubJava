@@ -53,11 +53,11 @@ public class UsuarioServiceImpl implements UsuarioService {
         }
 
         Papel papel = request.papel();
-        if (papel == Papel.ADMIN && (adminLogado == null || adminLogado.getPapel() != Papel.ADMIN
-                && adminLogado.getPapel() != Papel.SUPERUSUARIO)) {
+        if (papel == Papel.ADMIN && (adminLogado == null || (adminLogado.getPapel() != Papel.ADMIN
+                && adminLogado.getPapel() != Papel.SUPERUSUARIO && adminLogado.getPapel() != Papel.SUPER))) {
             throw new ForbiddenException("Apenas administradores criam outros administradores.");
         }
-        if (papel == Papel.SUPERUSUARIO && (adminLogado == null || adminLogado.getPapel() != Papel.SUPERUSUARIO)) {
+        if ((papel == Papel.SUPERUSUARIO || papel == Papel.SUPER) && (adminLogado == null || (adminLogado.getPapel() != Papel.SUPERUSUARIO && adminLogado.getPapel() != Papel.SUPER))) {
             throw new ForbiddenException("Apenas superusuários criam outros superusuários.");
         }
 
@@ -122,7 +122,7 @@ public class UsuarioServiceImpl implements UsuarioService {
                 }
 
                 Papel papel = item.papel() != null ? item.papel() : Papel.USUARIO;
-                if (papel == Papel.ADMIN || papel == Papel.SUPERUSUARIO) {
+                if (papel == Papel.ADMIN || papel == Papel.SUPERUSUARIO || papel == Papel.SUPER) {
                     falhas.add(new ImportarLoteResponse.ItemFalha(linha, item.email(),
                             "Papel " + papel + " não pode ser atribuído via importação"));
                     continue;
@@ -183,32 +183,52 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Override
     @Transactional
     public UsuarioResponse atualizar(Usuario logado, Long id, AtualizarUsuarioRequest request) {
+        log.info("[USUARIO ATUALIZAR] Usuário '{}' (id={}) tentando atualizar usuário id={}",
+                logado.getNome(), logado.getId(), id);
+
         Usuario alvo = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
 
-        // Apenas ADMIN/SUPERUSUARIO podem alterar papel
-        if (request.papel() != null && request.papel() != alvo.getPapel()) {
-            if (logado.getPapel() != Papel.ADMIN && logado.getPapel() != Papel.SUPERUSUARIO) {
-                throw new ForbiddenException("Apenas administradores podem alterar o papel do usuário.");
-            }
+        boolean isAdm = logado.getPapel() == Papel.ADMIN || logado.getPapel() == Papel.SUPERUSUARIO || logado.getPapel() == Papel.SUPER;
+
+        if (!isAdm && !alvo.getId().equals(logado.getId())) {
+            log.warn("[USUARIO ATUALIZAR] ACESSO NEGADO — '{}' tentou alterar dados de '{}'",
+                    logado.getEmail(), alvo.getEmail());
+            throw new ForbiddenException("Você não tem permissão para alterar dados de outro usuário.");
         }
 
-        if (!alvo.getEmail().equals(request.email()) && usuarioRepository.existsByEmail(request.email())) {
+        // Apenas ADMIN/SUPERUSUARIO/SUPER podem alterar papel
+        if (request.papel() != null && request.papel() != alvo.getPapel()) {
+            if (!isAdm) {
+                log.warn("[USUARIO ATUALIZAR] TENTATIVA ILEGAL — '{}' tentou alterar papel de '{}' para {}",
+                        logado.getEmail(), alvo.getEmail(), request.papel());
+                throw new ForbiddenException("Apenas administradores podem alterar o papel do usuário.");
+            }
+            log.info("[USUARIO ATUALIZAR] Papel alterado de {} para {} para usuário '{}'",
+                    alvo.getPapel(), request.papel(), alvo.getEmail());
+            alvo.setPapel(request.papel());
+        }
+
+        if (!alvo.getEmail().equalsIgnoreCase(request.email()) && usuarioRepository.existsByEmail(request.email())) {
             throw new ConflictException("Já existe um usuário com o e-mail: " + request.email());
         }
 
         alvo.setNome(request.nome());
         alvo.setEmail(request.email());
-        if (request.papel() != null) alvo.setPapel(request.papel());
         if (request.setor() != null) alvo.setSetor(request.setor());
         if (request.telefone() != null) alvo.setTelefone(request.telefone());
         if (request.localidade() != null) alvo.setLocalidade(request.localidade());
-        if (request.ativo() != null) alvo.setAtivo(request.ativo());
-        if (request.podeCadastrarUsuarios() != null) alvo.setPodeCadastrarUsuarios(request.podeCadastrarUsuarios());
-        if (request.setoresLiberados() != null) alvo.setSetoresLiberados(request.setoresLiberados());
+
+        if (isAdm) {
+            if (request.ativo() != null) alvo.setAtivo(request.ativo());
+            if (request.podeCadastrarUsuarios() != null) alvo.setPodeCadastrarUsuarios(request.podeCadastrarUsuarios());
+            if (request.setoresLiberados() != null) alvo.setSetoresLiberados(request.setoresLiberados());
+        }
 
         usuarioRepository.save(alvo);
         auditar(logado, "usuario.atualizar", "alvo=" + alvo.getEmail());
+        log.info("[USUARIO ATUALIZAR] SUCESSO — usuário '{}' (id={}) atualizado por '{}'",
+                alvo.getNome(), alvo.getId(), logado.getNome());
 
         return UsuarioResponse.de(alvo);
     }
@@ -222,11 +242,14 @@ public class UsuarioServiceImpl implements UsuarioService {
         Usuario alvo = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
         if (Objects.equals(alvo.getId(), adminLogado.getId())) {
+            log.warn("[USUARIO DESATIVAR] '{}' tentou desativar a própria conta", adminLogado.getEmail());
             throw new BusinessException("Você não pode desativar a própria conta.");
         }
         alvo.setAtivo(false);
         usuarioRepository.save(alvo);
         auditar(adminLogado, "usuario.desativar", "alvo=" + alvo.getEmail());
+        log.info("[USUARIO DESATIVAR] Conta de '{}' (id={}) desativada por '{}'",
+                alvo.getNome(), alvo.getId(), adminLogado.getNome());
     }
 
     @Override
@@ -237,6 +260,8 @@ public class UsuarioServiceImpl implements UsuarioService {
         alvo.setAtivo(true);
         usuarioRepository.save(alvo);
         auditar(adminLogado, "usuario.ativar", "alvo=" + alvo.getEmail());
+        log.info("[USUARIO ATIVAR] Conta de '{}' (id={}) reativada por '{}'",
+                alvo.getNome(), alvo.getId(), adminLogado.getNome());
     }
 
     // ============================================================
@@ -245,11 +270,16 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Override
     @Transactional
     public UsuarioResponse resetarSenhaManual(Usuario solicitante, Long usuarioId) {
+        log.info("[RESET SENHA] '{}' (papel={}) solicitando reset de senha para usuário id={}",
+                solicitante.getNome(), solicitante.getPapel(), usuarioId);
+
         boolean podeResetar = solicitante.getPapel() == Papel.ADMIN
                 || solicitante.getPapel() == Papel.SUPERUSUARIO
+                || solicitante.getPapel() == Papel.SUPER
                 || solicitante.getPapel() == Papel.TECNICO;
 
         if (!podeResetar) {
+            log.warn("[RESET SENHA] NEGADO — papel '{}' não tem permissão para resetar senhas", solicitante.getPapel());
             throw new ForbiddenException("Seu perfil não permite resetar senhas.");
         }
 
@@ -257,6 +287,8 @@ public class UsuarioServiceImpl implements UsuarioService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
 
         if (solicitante.getPapel() == Papel.TECNICO && !compartilhaSetor(solicitante, alvo)) {
+            log.warn("[RESET SENHA] NEGADO — técnico '{}' tentou resetar senha de usuário de setor diferente: '{}'",
+                    solicitante.getEmail(), alvo.getEmail());
             throw new ForbiddenException("Você só pode resetar senhas de usuários do seu setor.");
         }
 
@@ -266,7 +298,8 @@ public class UsuarioServiceImpl implements UsuarioService {
         usuarioRepository.save(alvo);
 
         auditar(solicitante, "usuario.resetar_senha", "alvo=" + alvo.getEmail());
-        log.info("Senha resetada do usuário id={} por id={}", alvo.getId(), solicitante.getId());
+        log.info("[RESET SENHA] SUCESSO — senha de '{}' (id={}) resetada por '{}' (id={})",
+                alvo.getNome(), alvo.getId(), solicitante.getNome(), solicitante.getId());
 
         return UsuarioResponse.de(alvo, novaSenha);
     }
@@ -277,12 +310,16 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Override
     @Transactional
     public void alterarSenha(Usuario logado, AlterarSenhaRequest request) {
+        log.info("[ALTERAR SENHA] Usuário '{}' (id={}) solicitando alteração de senha", logado.getNome(), logado.getId());
+
         if (!passwordEncoder.matches(request.senhaAtual(), logado.getSenhaHash())) {
+            log.warn("[ALTERAR SENHA] FALHOU — senha atual incorreta para usuário '{}'", logado.getEmail());
             throw new BusinessException("Senha atual incorreta.");
         }
         logado.setSenhaHash(passwordEncoder.encode(request.novaSenha()));
         usuarioRepository.save(logado);
         auditar(logado, "usuario.alterar_senha", "");
+        log.info("[ALTERAR SENHA] SUCESSO — senha alterada para usuário '{}' (id={})", logado.getNome(), logado.getId());
     }
 
     // ============================================================

@@ -62,8 +62,7 @@ public class HistoricoChamado {
         }
 
         public HistoricoChamadoBuilder criadoEm(LocalDateTime criadoEm) {
-            this.dataEvento = criadoEm;
-            return this;
+            return this.dataEvento(criadoEm);
         }
     }
 }

@@ -7,5 +7,5 @@ import thickethub.domain.model.HistoricoChamado;
 import java.util.List;
 
 public interface HistoricoRepository extends JpaRepository<HistoricoChamado, Long>, JpaSpecificationExecutor<HistoricoChamado> {
-    List<HistoricoChamado> findByChamadoIdOrderByDataEventoAsc(Long chamadoId);
+    List<HistoricoChamado> findByChamado_IdOrderByDataEventoAsc(Long chamadoId);
 }

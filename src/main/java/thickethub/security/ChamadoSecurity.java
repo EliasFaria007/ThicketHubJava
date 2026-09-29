@@ -78,7 +78,7 @@ public class ChamadoSecurity {
 
     @Transactional(readOnly = true)
     public boolean podeEncaminharPara(Long chamadoId, String email, String setorDestino) {
-        if (chamadoId == null || email == null || setorDestino == null) return false;
+        if (chamadoId == null || email == null) return false;
 
         Usuario user = usuarioRepository.findByEmail(email).orElse(null);
         if (user == null) return false;
@@ -90,7 +90,29 @@ public class ChamadoSecurity {
         if (liberados == null || liberados.isEmpty()) return false;
 
         return chamadoRepository.findById(chamadoId)
-                .map(chamado -> liberados.contains(chamado.getSetor()))
+                .map(chamado -> {
+                    boolean podeNoOrigem = chamado.getSetor() != null && liberados.contains(chamado.getSetor());
+                    if (setorDestino == null || setorDestino.isBlank()) {
+                        return podeNoOrigem;
+                    }
+                    return podeNoOrigem;
+                })
+                .orElse(false);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean podeVisualizarPorProtocolo(String protocolo, String email) {
+        if (protocolo == null || email == null) return false;
+        return chamadoRepository.findByProtocolo(protocolo)
+                .map(chamado -> podeVisualizar(chamado.getId(), email))
+                .orElse(false);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean ehMesmoUsuario(Long usuarioId, String email) {
+        if (usuarioId == null || email == null) return false;
+        return usuarioRepository.findById(usuarioId)
+                .map(u -> email.equalsIgnoreCase(u.getEmail()))
                 .orElse(false);
     }
 }

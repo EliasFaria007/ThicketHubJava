@@ -2,16 +2,16 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/thickethub_db}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    password: ${DB_PASSWORD:Elefantamon1.}
     driver-class-name: org.postgresql.Driver
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: update
     show-sql: true
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
   flyway:
     enabled: false
   data:
@@ -31,7 +31,19 @@ spring:
           starttls:
             enable: true
 
+management:
+  health:
+    mail:
+      enabled: false
+    redis:
+      enabled: false
+
 logging:
   level:
-    thickethub: DEBUG
-    org.springframework.security: DEBUG
+    thickethub: INFO
+    org.springframework.security: WARN
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN
+    root: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%-5level] %logger{30} — %msg%n"

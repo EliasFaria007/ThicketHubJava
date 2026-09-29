@@ -53,8 +53,11 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse login(LoginRequest request, String ipOrigem) {
+        log.info("[LOGIN] Tentativa de login — email: {}, ip: {}", request.email(), ipOrigem);
+
         // Rate limit por email e IP
         if (!rateLimiterService.permitirLogin(request.email(), ipOrigem)) {
+            log.warn("[LOGIN] BLOQUEADO por rate limiting — email: {}, ip: {}", request.email(), ipOrigem);
             auditar(null, "auth.login.bloqueado",
                     "email=" + request.email() + "; ip=" + ipOrigem, ipOrigem);
             throw new BusinessException(
@@ -65,6 +68,7 @@ public class AuthServiceImpl implements AuthService {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.email(), request.password()));
         } catch (AuthenticationException e) {
+            log.warn("[LOGIN] FALHOU — credenciais inválidas para email: {}, ip: {}", request.email(), ipOrigem);
             auditar(null, "auth.login.falhou",
                     "email=" + request.email() + "; ip=" + ipOrigem, ipOrigem);
             throw new BadCredentialsException("E-mail ou senha inválidos.");
@@ -74,6 +78,7 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
 
         if (!Boolean.TRUE.equals(usuario.getAtivo())) {
+            log.warn("[LOGIN] NEGADO — conta desativada para usuário id: {}, email: {}", usuario.getId(), request.email());
             throw new BusinessException("Conta desativada. Contate o administrador.");
         }
 
@@ -83,7 +88,8 @@ public class AuthServiceImpl implements AuthService {
         auditar(usuario, "auth.login.sucesso",
                 "ip=" + ipOrigem, ipOrigem);
 
-        log.info("Login bem-sucedido: id={}, ip={}", usuario.getId(), ipOrigem);
+        log.info("[LOGIN] SUCESSO — usuário: '{}' (id={}, papel={}) autenticado via ip: {}",
+                usuario.getNome(), usuario.getId(), usuario.getPapel(), ipOrigem);
 
         return buildAuthResponse(accessToken, refreshToken, usuario);
     }
@@ -91,14 +97,17 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(readOnly = true)
     public AuthResponse refresh(RefreshTokenRequest request) {
+        log.info("[TOKEN REFRESH] Tentativa de renovação de token");
         String email;
         try {
             email = jwtService.extractUsername(request.refreshToken());
         } catch (Exception e) {
+            log.warn("[TOKEN REFRESH] FALHOU — refresh token inválido ou expirado: {}", e.getMessage());
             throw new UnauthorizedException("Refresh token inválido ou expirado.");
         }
 
         if (tokenBlacklistService.contem(request.refreshToken())) {
+            log.warn("[TOKEN REFRESH] NEGADO — refresh token está na blacklist (revogado) para: {}", email);
             throw new UnauthorizedException("Refresh token revogado.");
         }
 
@@ -108,6 +117,7 @@ public class AuthServiceImpl implements AuthService {
         String novoAccessToken = jwtService.generateToken(usuario);
         String novoRefreshToken = jwtService.generateRefreshToken(usuario);
 
+        log.info("[TOKEN REFRESH] SUCESSO — novo token gerado para usuário: '{}' (id={})", usuario.getNome(), usuario.getId());
         return buildAuthResponse(novoAccessToken, novoRefreshToken, usuario);
     }
 
@@ -121,9 +131,11 @@ public class AuthServiceImpl implements AuthService {
                                 .atZone(java.time.ZoneId.systemDefault()).toLocalDateTime());
                 if (!tempoRestante.isNegative()) {
                     tokenBlacklistService.revogar(token, tempoRestante);
+                    log.info("[LOGOUT] Token revogado com sucesso — expira em {} minutos", tempoRestante.toMinutes());
                 }
             } catch (Exception e) {
                 tokenBlacklistService.revogar(token, Duration.ofHours(1));
+                log.warn("[LOGOUT] Falha ao calcular expiração do token — revogado com TTL padrão de 1h: {}", e.getMessage());
             }
         }
     }
@@ -137,9 +149,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("Limite de solicitações de SMS atingido. Aguarde 1 hora.");
         }
 
-        Usuario usuario = usuarioRepository.findAll().stream()
-                .filter(u -> telefone.equals(u.getTelefone()))
-                .findFirst()
+        Usuario usuario = usuarioRepository.findByTelefone(telefone)
                 .orElse(null);
 
         // Não revelamos se o telefone existe (segurança anti-enumeração)
@@ -203,18 +213,19 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void redefinirSenha(RedefinirSenhaRequest request) {
+        log.info("[REDEFINIR SENHA] Tentativa de redefinição de senha via ticket");
         RecuperacaoSms recuperacao = recuperacaoSmsRepository
                 .findByTicketValidacaoAndUtilizadoFalse(request.ticketValidacao())
                 .orElseThrow(() -> new BusinessException("Ticket de redefinição inválido ou já utilizado."));
 
         if (LocalDateTime.now().isAfter(recuperacao.getExpiraEm())) {
+            log.warn("[REDEFINIR SENHA] Ticket expirado para telefone terminando em {}",
+                    recuperacao.getTelefone().substring(Math.max(0, recuperacao.getTelefone().length() - 4)));
             throw new BusinessException("Ticket expirado. Solicite um novo código.");
         }
 
         // Encontrar usuário pelo telefone associado ao ticket
-        Usuario usuario = usuarioRepository.findAll().stream()
-                .filter(u -> recuperacao.getTelefone().equals(u.getTelefone()))
-                .findFirst()
+        Usuario usuario = usuarioRepository.findByTelefone(recuperacao.getTelefone())
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
 
         usuario.setSenhaHash(passwordEncoder.encode(request.novaSenha()));
@@ -225,16 +236,19 @@ public class AuthServiceImpl implements AuthService {
         recuperacaoSmsRepository.save(recuperacao);
 
         auditar(usuario, "auth.redefinir_senha", "via=sms", "sistema");
-        log.info("Senha redefinida via SMS para usuário id={}", usuario.getId());
+        log.info("[REDEFINIR SENHA] SUCESSO — senha redefinida via SMS para usuário id={}, nome='{}'",
+                usuario.getId(), usuario.getNome());
     }
 
     @Override
     @Transactional
     public AuthResponse completarPrimeiroAcesso(String email, CompletarCadastroRequest request) {
+        log.info("[PRIMEIRO ACESSO] Usuário completando primeiro acesso — email: {}", email);
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
 
         if (Boolean.TRUE.equals(usuario.getPrimeiroAcessoConcluido())) {
+            log.warn("[PRIMEIRO ACESSO] Já concluído anteriormente para usuário id={}", usuario.getId());
             throw new BusinessException("Primeiro acesso já foi concluído.");
         }
 
@@ -253,7 +267,8 @@ public class AuthServiceImpl implements AuthService {
         String refreshToken = jwtService.generateRefreshToken(usuario);
 
         auditar(usuario, "auth.primeiro_acesso.concluido", "", "sistema");
-        log.info("Primeiro acesso concluído para usuário id={}", usuario.getId());
+        log.info("[PRIMEIRO ACESSO] CONCLUÍDO — usuário: '{}' (id={}) definiu sua senha e completou o cadastro",
+                usuario.getNome(), usuario.getId());
 
         return buildAuthResponse(accessToken, refreshToken, usuario);
     }

@@ -9,7 +9,7 @@ import thickethub.domain.model.Notificacao;
 import java.util.List;
 
 public interface NotificacaoRepository extends JpaRepository<Notificacao, Long>, JpaSpecificationExecutor<Notificacao> {
-    Page<Notificacao> findByUsuarioIdOrderByCriadoEmDesc(Long usuarioId, Pageable pageable);
-    List<Notificacao> findByUsuarioIdAndLidaFalseOrderByCriadoEmDesc(Long usuarioId);
-    long countByUsuarioIdAndLidaFalse(Long usuarioId);
+    Page<Notificacao> findByUsuario_IdOrderByCriadoEmDesc(Long usuarioId, Pageable pageable);
+    List<Notificacao> findByUsuario_IdAndLidaFalseOrderByCriadoEmDesc(Long usuarioId);
+    long countByUsuario_IdAndLidaFalse(Long usuarioId);
 }

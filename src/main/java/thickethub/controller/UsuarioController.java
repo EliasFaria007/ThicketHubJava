@@ -46,6 +46,7 @@ public class UsuarioController {
         return ResponseEntity.ok(ApiResponse.sucesso(usuarioService.listarTodos(), "Usuários listados", 200));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER', 'TECNICO') or @chamadoSecurity.ehMesmoUsuario(#id, authentication.name)")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UsuarioResponse>> buscarPorId(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.sucesso(usuarioService.buscarPorId(id), "Usuário encontrado", 200));
@@ -57,6 +58,7 @@ public class UsuarioController {
         return ResponseEntity.ok(ApiResponse.sucesso(UsuarioResponse.de(logado), "Perfil do usuário", 200));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER') or @chamadoSecurity.ehMesmoUsuario(#id, authentication.name)")
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<UsuarioResponse>> atualizar(@PathVariable Long id, @Valid @RequestBody AtualizarUsuarioRequest request) {
         Usuario logado = SecurityUtils.getUsuarioLogado();

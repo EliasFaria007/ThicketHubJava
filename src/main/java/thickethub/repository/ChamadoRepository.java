@@ -14,8 +14,8 @@ import java.util.Optional;
 public interface ChamadoRepository extends JpaRepository<Chamado, Long>, JpaSpecificationExecutor<Chamado> {
     Optional<Chamado> findByProtocolo(String protocolo);
     boolean existsByProtocolo(String protocolo);
-    List<Chamado> findBySolicitanteId(Long solicitanteId);
-    List<Chamado> findByTecnicoId(Long tecnicoId);
+    List<Chamado> findBySolicitante_Id(Long solicitanteId);
+    List<Chamado> findByTecnico_Id(Long tecnicoId);
     long countByStatus(StatusChamado status);
     long countBySetor(String setor);
     List<Chamado> findByStatusIn(List<StatusChamado> statuses);

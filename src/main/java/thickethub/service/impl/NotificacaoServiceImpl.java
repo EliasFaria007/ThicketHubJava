@@ -53,7 +53,7 @@ public class NotificacaoServiceImpl implements NotificacaoService {
     @Override
     @Transactional(readOnly = true)
     public NotificacoesListResponse listarNaoLidas(Long usuarioId) {
-        List<Notificacao> lista = notificacaoRepository.findByUsuarioIdAndLidaFalseOrderByCriadoEmDesc(usuarioId);
+        List<Notificacao> lista = notificacaoRepository.findByUsuario_IdAndLidaFalseOrderByCriadoEmDesc(usuarioId);
         long totalNaoLidas = lista.size();
         List<NotificacaoResponse> dtos = lista.stream().map(NotificacaoResponse::de).toList();
         return new NotificacoesListResponse(dtos, totalNaoLidas);
@@ -62,7 +62,7 @@ public class NotificacaoServiceImpl implements NotificacaoService {
     @Override
     @Transactional(readOnly = true)
     public PaginacaoResponse<NotificacaoResponse> listarTodas(Long usuarioId, Pageable pageable) {
-        Page<Notificacao> page = notificacaoRepository.findByUsuarioIdOrderByCriadoEmDesc(usuarioId, pageable);
+        Page<Notificacao> page = notificacaoRepository.findByUsuario_IdOrderByCriadoEmDesc(usuarioId, pageable);
         return PaginacaoResponse.de(page.map(NotificacaoResponse::de));
     }
 
@@ -72,7 +72,7 @@ public class NotificacaoServiceImpl implements NotificacaoService {
         Notificacao n = notificacaoRepository.findById(notificacaoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Notificação não encontrada."));
 
-        if (!n.getUsuarioId().equals(usuarioId)) {
+        if (!java.util.Objects.equals(n.getUsuarioId(), usuarioId)) {
             throw new ForbiddenException("Esta notificação não pertence a você.");
         }
 
@@ -83,7 +83,7 @@ public class NotificacaoServiceImpl implements NotificacaoService {
     @Override
     @Transactional
     public void marcarTodasComoLidas(Long usuarioId) {
-        List<Notificacao> naoLidas = notificacaoRepository.findByUsuarioIdAndLidaFalseOrderByCriadoEmDesc(usuarioId);
+        List<Notificacao> naoLidas = notificacaoRepository.findByUsuario_IdAndLidaFalseOrderByCriadoEmDesc(usuarioId);
         naoLidas.forEach(n -> n.setLida(true));
         notificacaoRepository.saveAll(naoLidas);
     }
