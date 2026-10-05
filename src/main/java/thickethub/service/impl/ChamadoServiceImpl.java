@@ -91,7 +91,7 @@ public class ChamadoServiceImpl implements ChamadoService {
                 .versao(0L)
                 .build();
 
-        chamadoRepository.save(chamado);
+        chamado = chamadoRepository.saveAndFlush(chamado);
 
         registrarHistorico(chamado, solicitante, TipoHistorico.ABERTURA, "Chamado criado pelo solicitante");
         auditar(solicitante, "chamado.criar", "protocolo=" + chamado.getProtocolo());

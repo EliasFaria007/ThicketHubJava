@@ -64,10 +64,22 @@ public class ChamadoSpecification {
                 return cb.conjunction();
             }
             if ("minha".equalsIgnoreCase(fila)) {
-                return cb.equal(root.get("tecnico").get("id"), user.getId());
+                return cb.and(
+                    cb.equal(root.get("tecnico").get("id"), user.getId()),
+                    cb.not(root.get("status").in(StatusChamado.RESOLVIDO, StatusChamado.FECHADO, StatusChamado.CONCLUIDO, StatusChamado.CANCELADO))
+                );
+            }
+            if ("resolvidos".equalsIgnoreCase(fila)) {
+                return cb.and(
+                    cb.equal(root.get("tecnico").get("id"), user.getId()),
+                    root.get("status").in(StatusChamado.RESOLVIDO, StatusChamado.FECHADO, StatusChamado.CONCLUIDO)
+                );
             }
             if ("geral".equalsIgnoreCase(fila)) {
-                return cb.isNull(root.get("tecnico"));
+                return cb.and(
+                    cb.isNull(root.get("tecnico")),
+                    cb.not(root.get("status").in(StatusChamado.RESOLVIDO, StatusChamado.FECHADO, StatusChamado.CONCLUIDO, StatusChamado.CANCELADO))
+                );
             }
             return cb.conjunction();
         };

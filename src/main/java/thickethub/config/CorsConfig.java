@@ -17,6 +17,7 @@ public class CorsConfig {
         config.setAllowedOriginPatterns(List.of(
                 "https://thickethub.defensoria.mg.gov.br",
                 "http://localhost:5173",
+                "http://10.26.4.137:5173",
                 "http://localhost:3000"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
