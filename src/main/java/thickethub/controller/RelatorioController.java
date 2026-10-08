@@ -19,7 +19,7 @@ public class RelatorioController {
 
     private final ChamadoService chamadoService;
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER', 'TECNICO')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'TECNICO')")
     @GetMapping("/geral")
     public ResponseEntity<ApiResponse<MetricasResponse>> relatorioGeral() {
         Usuario logado = SecurityUtils.getUsuarioLogado();

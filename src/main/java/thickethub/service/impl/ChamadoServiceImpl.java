@@ -367,13 +367,17 @@ public class ChamadoServiceImpl implements ChamadoService {
             throw new BusinessException("Só é possível reabrir chamados resolvidos ou fechados.");
         }
 
+        String motivoFinal = (justificativa != null && !justificativa.isBlank())
+                ? justificativa.trim()
+                : "Reabertura autorizada pelo administrador";
+
         chamado.setStatus(StatusChamado.EM_ATENDIMENTO);
         chamado.setResolvidoEm(null);
-        chamado.setMotivoReabertura(justificativa);
+        chamado.setMotivoReabertura(motivoFinal);
         chamado.setSlaRodandoDesde(LocalDateTime.now());
         chamadoRepository.save(chamado);
 
-        registrarHistorico(chamado, user, TipoHistorico.REABERTURA, "Chamado reaberto: " + justificativa);
+        registrarHistorico(chamado, user, TipoHistorico.REABERTURA, "Chamado reaberto: " + motivoFinal);
         auditar(user, "chamado.reabrir", "protocolo=" + chamado.getProtocolo());
         if (chamado.getTecnico() != null) {
             notificarUsuario(chamado.getTecnico(), chamado, "O chamado " + chamado.getProtocolo() + " foi reaberto.");
@@ -569,6 +573,7 @@ public class ChamadoServiceImpl implements ChamadoService {
                     .acao(acao)
                     .detalhe(detalhe)
                     .usuario(usuario)
+                    .ipOrigem(thickethub.security.SecurityUtils.obterIpCliente())
                     .criadoEm(LocalDateTime.now())
                     .build();
             auditoriaRepository.save(a);

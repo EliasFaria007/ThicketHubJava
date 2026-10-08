@@ -353,7 +353,8 @@ public class UsuarioServiceImpl implements UsuarioService {
         try {
             Auditoria.AuditoriaBuilder builder = Auditoria.builder()
                     .acao(acao)
-                    .detalhe(detalhe);
+                    .detalhe(detalhe)
+                    .ipOrigem(thickethub.security.SecurityUtils.obterIpCliente());
             if (usuario != null) {
                 builder.usuarioId(usuario.getId()).usuarioNome(usuario.getNome());
             }

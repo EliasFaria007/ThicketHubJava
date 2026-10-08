@@ -20,7 +20,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
-        String ip = httpRequest.getRemoteAddr();
+        String ip = SecurityUtils.extrairIp(httpRequest);
         AuthResponse response = authService.login(request, ip);
         return ResponseEntity.ok(ApiResponse.sucesso(response, "Login realizado com sucesso", 200));
     }

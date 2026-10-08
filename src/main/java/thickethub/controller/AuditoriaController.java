@@ -27,7 +27,7 @@ public class AuditoriaController {
 
     private final AuditoriaService auditoriaService;
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER', 'TECNICO')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'TECNICO')")
     @GetMapping
     public ResponseEntity<ApiResponse<PaginacaoResponse<AuditoriaResponse>>> listar(
             @RequestParam(required = false) Long usuarioId,
