@@ -209,15 +209,29 @@ public class UsuarioServiceImpl implements UsuarioService {
             alvo.setPapel(request.papel());
         }
 
-        if (!alvo.getEmail().equalsIgnoreCase(request.email()) && usuarioRepository.existsByEmail(request.email())) {
-            throw new ConflictException("Já existe um usuário com o e-mail: " + request.email());
+        if (request.email() != null && !request.email().isBlank()) {
+            if (!alvo.getEmail().equalsIgnoreCase(request.email()) && usuarioRepository.existsByEmail(request.email())) {
+                throw new ConflictException("Já existe um usuário com o e-mail: " + request.email());
+            }
+            alvo.setEmail(request.email());
         }
 
-        alvo.setNome(request.nome());
-        alvo.setEmail(request.email());
+        if (request.nome() != null && !request.nome().isBlank()) {
+            alvo.setNome(request.nome());
+        }
         if (request.setor() != null) alvo.setSetor(request.setor());
         if (request.telefone() != null) alvo.setTelefone(request.telefone());
         if (request.localidade() != null) alvo.setLocalidade(request.localidade());
+        if (request.assinatura() != null) alvo.setAssinatura(request.assinatura());
+        if (request.incluirAssinaturaPadrao() != null) alvo.setIncluirAssinaturaPadrao(request.incluirAssinaturaPadrao());
+        if (request.termosVersao() != null && !request.termosVersao().isBlank()) {
+            alvo.setTermosVersao(request.termosVersao());
+            alvo.setTermosAceitosEm(LocalDateTime.now());
+            alvo.setPrimeiroAcessoConcluido(true);
+        }
+        if (request.primeiroAcessoConcluido() != null) {
+            alvo.setPrimeiroAcessoConcluido(request.primeiroAcessoConcluido());
+        }
 
         if (isAdm) {
             if (request.ativo() != null) alvo.setAtivo(request.ativo());

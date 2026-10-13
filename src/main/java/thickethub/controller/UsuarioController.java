@@ -55,7 +55,7 @@ public class UsuarioController {
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UsuarioResponse>> me() {
         Usuario logado = SecurityUtils.getUsuarioLogado();
-        return ResponseEntity.ok(ApiResponse.sucesso(UsuarioResponse.de(logado), "Perfil do usuário", 200));
+        return ResponseEntity.ok(ApiResponse.sucesso(usuarioService.buscarPorId(logado.getId()), "Perfil do usuário", 200));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO') or @chamadoSecurity.ehMesmoUsuario(#id, authentication.name)")

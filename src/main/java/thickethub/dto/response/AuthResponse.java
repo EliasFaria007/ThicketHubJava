@@ -13,5 +13,9 @@ public record AuthResponse(
         Papel papel,
         String setor,
         Boolean primeiroAcessoConcluido,
-        Set<String> setoresLiberados
+        Set<String> setoresLiberados,
+        String assinatura,
+        Boolean incluirAssinaturaPadrao,
+        String termosVersao,
+        java.time.LocalDateTime termosAceitosEm
 ) {}

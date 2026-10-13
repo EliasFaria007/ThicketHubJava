@@ -11,4 +11,5 @@ public interface AuthService {
     String validarSms(ValidarSmsRequest request);
     void redefinirSenha(RedefinirSenhaRequest request);
     AuthResponse completarPrimeiroAcesso(String email, CompletarCadastroRequest request);
+    thickethub.dto.response.UsuarioResponse aceitarTermos(Long usuarioId, AceitarTermosRequest request);
 }

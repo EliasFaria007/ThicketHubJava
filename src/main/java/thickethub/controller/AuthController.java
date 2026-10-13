@@ -64,4 +64,11 @@ public class AuthController {
         AuthResponse response = authService.completarPrimeiroAcesso(email, request);
         return ResponseEntity.ok(ApiResponse.sucesso(response, "Primeiro acesso concluído com sucesso.", 200));
     }
+
+    @PostMapping("/termos")
+    public ResponseEntity<ApiResponse<thickethub.dto.response.UsuarioResponse>> aceitarTermos(@RequestBody(required = false) AceitarTermosRequest request) {
+        thickethub.domain.model.Usuario logado = SecurityUtils.getUsuarioLogado();
+        thickethub.dto.response.UsuarioResponse response = authService.aceitarTermos(logado.getId(), request);
+        return ResponseEntity.ok(ApiResponse.sucesso(response, "Termos aceitos com sucesso.", 200));
+    }
 }

@@ -23,6 +23,7 @@ import thickethub.repository.RecuperacaoSmsRepository;
 import thickethub.repository.UsuarioRepository;
 import thickethub.security.JwtService;
 import thickethub.security.RateLimiterService;
+import thickethub.security.SecurityUtils;
 import thickethub.security.TokenBlacklistService;
 import thickethub.service.AuthService;
 import thickethub.service.SmsService;
@@ -287,7 +288,11 @@ public class AuthServiceImpl implements AuthService {
                 usuario.getPapel(),
                 usuario.getSetor(),
                 usuario.getPrimeiroAcessoConcluido(),
-                usuario.getSetoresLiberados()
+                usuario.getSetoresLiberados(),
+                usuario.getAssinatura(),
+                usuario.getIncluirAssinaturaPadrao(),
+                usuario.getTermosVersao(),
+                usuario.getTermosAceitosEm()
         );
     }
 
@@ -319,5 +324,20 @@ public class AuthServiceImpl implements AuthService {
             sb.append(RANDOM.nextInt(10));
         }
         return sb.toString();
+    }
+
+    @Override
+    @Transactional
+    public thickethub.dto.response.UsuarioResponse aceitarTermos(Long usuarioId, AceitarTermosRequest request) {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
+        String versao = (request != null && request.versao() != null && !request.versao().isBlank()) ? request.versao() : "1.0";
+        usuario.setTermosVersao(versao);
+        usuario.setTermosAceitosEm(LocalDateTime.now());
+        usuario.setPrimeiroAcessoConcluido(true);
+        usuarioRepository.save(usuario);
+        auditar(usuario, "auth.termos", "versao=" + versao, SecurityUtils.obterIpCliente());
+        log.info("[TERMOS ACEITE] Usuário id={}, nome='{}' aceitou os termos versão {}", usuario.getId(), usuario.getNome(), versao);
+        return thickethub.dto.response.UsuarioResponse.de(usuario);
     }
 }

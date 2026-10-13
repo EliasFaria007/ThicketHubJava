@@ -19,7 +19,11 @@ public record UsuarioResponse(
         Boolean ativo,
         LocalDateTime criadoEm,
         Set<String> setoresLiberados,
-        String senhaTemporaria
+        String senhaTemporaria,
+        String assinatura,
+        Boolean incluirAssinaturaPadrao,
+        String termosVersao,
+        LocalDateTime termosAceitosEm
 ) {
     public static UsuarioResponse de(Usuario usuario) {
         return de(usuario, null);
@@ -40,7 +44,11 @@ public record UsuarioResponse(
                 usuario.getAtivo(),
                 usuario.getCriadoEm(),
                 usuario.getSetoresLiberados(),
-                senhaTemporaria
+                senhaTemporaria,
+                usuario.getAssinatura(),
+                usuario.getIncluirAssinaturaPadrao(),
+                usuario.getTermosVersao(),
+                usuario.getTermosAceitosEm()
         );
     }
 }

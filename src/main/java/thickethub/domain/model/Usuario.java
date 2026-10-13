@@ -53,6 +53,19 @@ public class Usuario {
     @Builder.Default
     private Boolean primeiroAcessoConcluido = false;
 
+    @Column(columnDefinition = "TEXT")
+    private String assinatura;
+
+    @Column(name = "incluir_assinatura_padrao")
+    @Builder.Default
+    private Boolean incluirAssinaturaPadrao = true;
+
+    @Column(name = "termos_versao", length = 30)
+    private String termosVersao;
+
+    @Column(name = "termos_aceitos_em")
+    private LocalDateTime termosAceitosEm;
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean ativo = true;

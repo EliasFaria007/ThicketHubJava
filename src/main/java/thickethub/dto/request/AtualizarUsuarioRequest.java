@@ -7,13 +7,17 @@ import thickethub.domain.enums.Papel;
 import java.util.Set;
 
 public record AtualizarUsuarioRequest(
-        @NotBlank String nome,
-        @NotBlank @Email String email,
+        String nome,
+        @Email String email,
         Papel papel,
         String setor,
         String telefone,
         String localidade,
         Boolean ativo,
         Boolean podeCadastrarUsuarios,
-        Set<String> setoresLiberados
+        Set<String> setoresLiberados,
+        String assinatura,
+        Boolean incluirAssinaturaPadrao,
+        String termosVersao,
+        Boolean primeiroAcessoConcluido
 ) {}
