@@ -30,6 +30,8 @@ public interface ChamadoMapper {
     @Mapping(target = "chamadoId", source = "chamado.id")
     @Mapping(target = "autorId", source = "autor.id")
     @Mapping(target = "autorNome", source = "autor.nome")
+    @Mapping(target = "autorPapel", expression = "java(comentario.getAutor() != null && comentario.getAutor().getPapel() != null ? comentario.getAutor().getPapel().name() : null)")
+    @Mapping(target = "autorEmail", source = "autor.email")
     ComentarioResponse toComentarioResponse(Comentario comentario);
 
     @Mapping(target = "chamadoId", source = "chamado.id")

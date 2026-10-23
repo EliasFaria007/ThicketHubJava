@@ -19,6 +19,7 @@ import thickethub.exception.BusinessException;
 import thickethub.exception.ResourceNotFoundException;
 import thickethub.exception.UnauthorizedException;
 import thickethub.repository.AuditoriaRepository;
+import thickethub.repository.ConfigDominioRepository;
 import thickethub.repository.RecuperacaoSmsRepository;
 import thickethub.repository.UsuarioRepository;
 import thickethub.security.JwtService;
@@ -31,6 +32,7 @@ import thickethub.service.SmsService;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -47,6 +49,7 @@ public class AuthServiceImpl implements AuthService {
     private final TokenBlacklistService tokenBlacklistService;
     private final RateLimiterService rateLimiterService;
     private final SmsService smsService;
+    private final ConfigDominioRepository configDominioRepository;
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int OTP_EXPIRACAO_MINUTOS = 10;
@@ -91,6 +94,98 @@ public class AuthServiceImpl implements AuthService {
 
         log.info("[LOGIN] SUCESSO — usuário: '{}' (id={}, papel={}) autenticado via ip: {}",
                 usuario.getNome(), usuario.getId(), usuario.getPapel(), ipOrigem);
+
+        return buildAuthResponse(accessToken, refreshToken, usuario);
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse loginMicrosoft(MicrosoftLoginRequest request, String ipOrigem) {
+        log.info("[LOGIN MICROSOFT] Tentativa de login via Microsoft — email: {}, ip: {}", request.email(), ipOrigem);
+
+        String email = request.email();
+        String nome = request.nome();
+
+        // Se o token fornecido for um JWT (ex: ID token do Azure AD/Entra ID) e email não veio no body, tenta extrair
+        if ((email == null || email.isBlank()) && request.idToken() != null && request.idToken().contains(".")) {
+            try {
+                String[] parts = request.idToken().split("\\.");
+                if (parts.length >= 2) {
+                    byte[] decoded = java.util.Base64.getUrlDecoder().decode(parts[1]);
+                    String payloadJson = new String(decoded, java.nio.charset.StandardCharsets.UTF_8);
+                    log.info("[LOGIN MICROSOFT] Claims recebidas no ID Token: {}", payloadJson);
+                    com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(payloadJson);
+                    if (node.hasNonNull("preferred_username")) {
+                        email = node.get("preferred_username").asText();
+                    } else if (node.hasNonNull("email")) {
+                        email = node.get("email").asText();
+                    } else if (node.hasNonNull("upn")) {
+                        email = node.get("upn").asText();
+                    } else if (node.hasNonNull("unique_name") && node.get("unique_name").asText().contains("@")) {
+                        email = node.get("unique_name").asText();
+                    }
+                    if (node.hasNonNull("name") && (nome == null || nome.isBlank())) {
+                        nome = node.get("name").asText();
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[LOGIN MICROSOFT] Falha ao extrair claims do ID Token: {}", e.getMessage());
+            }
+        }
+
+        if (email == null || email.isBlank()) {
+            // Em caso de envio direto do email no idToken
+            if (request.idToken() != null && request.idToken().contains("@")) {
+                email = request.idToken().trim();
+            } else {
+                throw new BusinessException("E-mail institucional da Microsoft não informado.");
+            }
+        }
+
+        email = email.toLowerCase().trim();
+
+        // Validar domínio institucional cadastrado se houver domínios configurados
+        String dominio = email.contains("@") ? email.substring(email.indexOf("@") + 1) : "";
+        List<thickethub.domain.model.ConfigDominio> dominiosAtivos = configDominioRepository.findByAtivoTrue();
+        if (!dominiosAtivos.isEmpty()) {
+            boolean dominioValido = dominiosAtivos.stream().anyMatch(d -> d.getDominio().equalsIgnoreCase(dominio));
+            if (!dominioValido) {
+                log.warn("[LOGIN MICROSOFT] Domínio não autorizado: {}", dominio);
+                throw new BusinessException("O domínio @" + dominio + " não é autorizado para login institucional.");
+            }
+        }
+
+        // Buscar usuário existente ou provisionar automaticamente como USUARIO padrão
+        String finalEmail = email;
+        String finalNome = (nome != null && !nome.isBlank()) ? nome : email.substring(0, email.indexOf("@"));
+
+        Usuario usuario = usuarioRepository.findByEmail(email).orElseGet(() -> {
+            log.info("[LOGIN MICROSOFT] Provisionando novo usuário institucional via SSO Microsoft: {}", finalEmail);
+            Usuario novo = Usuario.builder()
+                    .email(finalEmail)
+                    .nome(finalNome)
+                    .papel(thickethub.domain.enums.Papel.USUARIO)
+                    .ativo(true)
+                    .primeiroAcessoConcluido(true)
+                    .termosVersao("1.0")
+                    .termosAceitosEm(LocalDateTime.now())
+                    .senhaHash(passwordEncoder.encode(UUID.randomUUID().toString()))
+                    .criadoEm(LocalDateTime.now())
+                    .build();
+            return usuarioRepository.save(novo);
+        });
+
+        if (!Boolean.TRUE.equals(usuario.getAtivo())) {
+            log.warn("[LOGIN MICROSOFT] NEGADO — conta desativada para usuário id: {}, email: {}", usuario.getId(), email);
+            throw new BusinessException("Conta institucional desativada. Contate o administrador.");
+        }
+
+        String accessToken = jwtService.generateToken(usuario);
+        String refreshToken = jwtService.generateRefreshToken(usuario);
+
+        auditar(usuario, "auth.login.microsoft", "sso_microsoft; email=" + email, ipOrigem);
+        log.info("[LOGIN MICROSOFT] SUCESSO — usuário '{}' (id={}, papel={}) autenticado via Microsoft",
+                usuario.getNome(), usuario.getId(), usuario.getPapel());
 
         return buildAuthResponse(accessToken, refreshToken, usuario);
     }

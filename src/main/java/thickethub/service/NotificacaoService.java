@@ -12,5 +12,6 @@ public interface NotificacaoService {
     NotificacoesListResponse listarNaoLidas(Long usuarioId);
     PaginacaoResponse<NotificacaoResponse> listarTodas(Long usuarioId, Pageable pageable);
     void marcarComoLida(Long usuarioId, Long notificacaoId);
+    void marcarPorChamado(Long usuarioId, Long chamadoId);
     void marcarTodasComoLidas(Long usuarioId);
 }

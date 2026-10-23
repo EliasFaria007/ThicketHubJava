@@ -46,17 +46,18 @@ public class UsuarioController {
         return ResponseEntity.ok(ApiResponse.sucesso(usuarioService.listarTodos(), "Usuários listados", 200));
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<UsuarioResponse>> me() {
+        Usuario logado = SecurityUtils.getUsuarioLogado();
+        return ResponseEntity.ok(ApiResponse.sucesso(usuarioService.buscarPorId(logado.getId()), "Perfil do usuário", 200));
+    }
+
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'TECNICO') or @chamadoSecurity.ehMesmoUsuario(#id, authentication.name)")
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UsuarioResponse>> buscarPorId(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.sucesso(usuarioService.buscarPorId(id), "Usuário encontrado", 200));
     }
 
-    @GetMapping("/me")
-    public ResponseEntity<ApiResponse<UsuarioResponse>> me() {
-        Usuario logado = SecurityUtils.getUsuarioLogado();
-        return ResponseEntity.ok(ApiResponse.sucesso(usuarioService.buscarPorId(logado.getId()), "Perfil do usuário", 200));
-    }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO') or @chamadoSecurity.ehMesmoUsuario(#id, authentication.name)")
     @PutMapping("/{id}")
@@ -68,6 +69,14 @@ public class UsuarioController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO')")
     @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deletar(@PathVariable Long id) {
+        Usuario logado = SecurityUtils.getUsuarioLogado();
+        usuarioService.deletar(logado, id);
+        return ResponseEntity.ok(ApiResponse.sucesso(null, "Usuário excluído com sucesso", 200));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO')")
+    @PatchMapping("/{id}/desativar")
     public ResponseEntity<ApiResponse<Void>> desativar(@PathVariable Long id) {
         Usuario logado = SecurityUtils.getUsuarioLogado();
         usuarioService.desativar(logado, id);

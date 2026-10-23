@@ -8,9 +8,13 @@ spring:
       enabled: true
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${PORT:${SERVER_PORT:8080}}
   servlet:
     context-path: /api
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/xml,text/plain,application/xml
+    min-response-size: 1024
 
 jwt:
   secret: ${JWT_SECRET:9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f}

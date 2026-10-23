@@ -10,5 +10,6 @@ public interface NotificacaoMapper {
 
     @Mapping(target = "usuarioId", source = "usuario.id")
     @Mapping(target = "chamadoId", source = "chamado.id")
+    @Mapping(target = "protocolo", source = "chamado.protocolo")
     NotificacaoResponse toResponse(Notificacao notificacao);
 }

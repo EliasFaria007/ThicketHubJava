@@ -4,6 +4,5 @@ public enum Papel {
     USUARIO,
     TECNICO,
     ADMIN,
-    SUPERUSUARIO,
-    SUPER;
+    SUPERUSUARIO;
 }

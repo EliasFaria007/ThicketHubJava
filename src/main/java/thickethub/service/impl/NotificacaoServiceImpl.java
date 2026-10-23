@@ -53,9 +53,9 @@ public class NotificacaoServiceImpl implements NotificacaoService {
     @Override
     @Transactional(readOnly = true)
     public NotificacoesListResponse listarNaoLidas(Long usuarioId) {
-        List<Notificacao> lista = notificacaoRepository.findByUsuario_IdAndLidaFalseOrderByCriadoEmDesc(usuarioId);
-        long totalNaoLidas = lista.size();
-        List<NotificacaoResponse> dtos = lista.stream().map(NotificacaoResponse::de).toList();
+        long totalNaoLidas = notificacaoRepository.countByUsuario_IdAndLidaFalse(usuarioId);
+        List<Notificacao> recentes = notificacaoRepository.findTop20ByUsuario_IdOrderByCriadoEmDesc(usuarioId);
+        List<NotificacaoResponse> dtos = recentes.stream().map(NotificacaoResponse::de).toList();
         return new NotificacoesListResponse(dtos, totalNaoLidas);
     }
 
@@ -78,6 +78,17 @@ public class NotificacaoServiceImpl implements NotificacaoService {
 
         n.setLida(true);
         notificacaoRepository.save(n);
+    }
+
+    @Override
+    @Transactional
+    public void marcarPorChamado(Long usuarioId, Long chamadoId) {
+        if (chamadoId == null || usuarioId == null) return;
+        List<Notificacao> naoLidas = notificacaoRepository.findByUsuario_IdAndChamado_IdAndLidaFalse(usuarioId, chamadoId);
+        if (!naoLidas.isEmpty()) {
+            naoLidas.forEach(n -> n.setLida(true));
+            notificacaoRepository.saveAll(naoLidas);
+        }
     }
 
     @Override

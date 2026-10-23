@@ -17,7 +17,7 @@ public class AuditoriaSpecification {
             if (user.getPapel() == Papel.TECNICO) {
                 return cb.equal(root.get("usuarioId"), user.getId());
             }
-            if (user.getPapel() == Papel.ADMIN || user.getPapel() == Papel.SUPERUSUARIO || user.getPapel() == Papel.SUPER) {
+            if (user.getPapel() == Papel.ADMIN || user.getPapel() == Papel.SUPERUSUARIO) {
                 return cb.conjunction();
             }
             return cb.equal(root.get("usuarioId"), user.getId());

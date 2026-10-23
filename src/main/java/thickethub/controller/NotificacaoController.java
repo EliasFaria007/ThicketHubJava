@@ -41,6 +41,13 @@ public class NotificacaoController {
         return ResponseEntity.ok(ApiResponse.sucesso(null, "Notificação marcada como lida", 200));
     }
 
+    @PatchMapping("/chamado/{chamadoId}/lidas")
+    public ResponseEntity<ApiResponse<Void>> marcarPorChamado(@PathVariable Long chamadoId) {
+        Usuario logado = SecurityUtils.getUsuarioLogado();
+        notificacaoService.marcarPorChamado(logado.getId(), chamadoId);
+        return ResponseEntity.ok(ApiResponse.sucesso(null, "Notificações do chamado marcadas como lidas", 200));
+    }
+
     @PatchMapping("/marcar-todas-lidas")
     public ResponseEntity<ApiResponse<Void>> marcarTodasComoLidas() {
         Usuario logado = SecurityUtils.getUsuarioLogado();

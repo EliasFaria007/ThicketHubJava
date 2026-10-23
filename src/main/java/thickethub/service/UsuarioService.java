@@ -15,6 +15,7 @@ public interface UsuarioService {
     UsuarioResponse atualizar(Usuario logado, Long id, AtualizarUsuarioRequest request);
     void desativar(Usuario adminLogado, Long id);
     void ativar(Usuario adminLogado, Long id);
+    void deletar(Usuario adminLogado, Long id);
     UsuarioResponse resetarSenhaManual(Usuario solicitante, Long usuarioId);
     void alterarSenha(Usuario logado, AlterarSenhaRequest request);
 }

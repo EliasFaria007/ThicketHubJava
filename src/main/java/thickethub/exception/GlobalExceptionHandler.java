@@ -24,6 +24,7 @@ public class GlobalExceptionHandler {
         log.warn("[VALIDAÇÃO] Requisição com dados inválidos — campos com erro: {}", erros);
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
         pd.setTitle("Requisição inválida");
+        pd.setDetail(String.join(", ", erros));
         pd.setType(URI.create("https://thickethub.defensoria.mg.gov.br/errors/bad-request"));
         pd.setProperty("erros", erros);
         return pd;

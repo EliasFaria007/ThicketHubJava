@@ -33,6 +33,9 @@ public class UsuarioServiceImpl implements UsuarioService {
     private final ConfigDominioRepository configDominioRepository;
     private final AuditoriaRepository auditoriaRepository;
     private final PasswordEncoder passwordEncoder;
+    private final thickethub.repository.ChamadoRepository chamadoRepository;
+    private final thickethub.repository.NotificacaoRepository notificacaoRepository;
+    private final thickethub.repository.ComentarioRepository comentarioRepository;
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
@@ -54,10 +57,10 @@ public class UsuarioServiceImpl implements UsuarioService {
 
         Papel papel = request.papel();
         if (papel == Papel.ADMIN && (adminLogado == null || (adminLogado.getPapel() != Papel.ADMIN
-                && adminLogado.getPapel() != Papel.SUPERUSUARIO && adminLogado.getPapel() != Papel.SUPER))) {
+                && adminLogado.getPapel() != Papel.SUPERUSUARIO))) {
             throw new ForbiddenException("Apenas administradores criam outros administradores.");
         }
-        if ((papel == Papel.SUPERUSUARIO || papel == Papel.SUPER) && (adminLogado == null || (adminLogado.getPapel() != Papel.SUPERUSUARIO && adminLogado.getPapel() != Papel.SUPER))) {
+        if ((papel == Papel.SUPERUSUARIO) && (adminLogado == null || adminLogado.getPapel() != Papel.SUPERUSUARIO)) {
             throw new ForbiddenException("Apenas superusuários criam outros superusuários.");
         }
 
@@ -122,7 +125,7 @@ public class UsuarioServiceImpl implements UsuarioService {
                 }
 
                 Papel papel = item.papel() != null ? item.papel() : Papel.USUARIO;
-                if (papel == Papel.ADMIN || papel == Papel.SUPERUSUARIO || papel == Papel.SUPER) {
+                if (papel == Papel.ADMIN || papel == Papel.SUPERUSUARIO) {
                     falhas.add(new ImportarLoteResponse.ItemFalha(linha, item.email(),
                             "Papel " + papel + " não pode ser atribuído via importação"));
                     continue;
@@ -189,7 +192,7 @@ public class UsuarioServiceImpl implements UsuarioService {
         Usuario alvo = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
 
-        boolean isAdm = logado.getPapel() == Papel.ADMIN || logado.getPapel() == Papel.SUPERUSUARIO || logado.getPapel() == Papel.SUPER;
+        boolean isAdm = logado.getPapel() == Papel.ADMIN || logado.getPapel() == Papel.SUPERUSUARIO;
 
         if (!isAdm && !alvo.getId().equals(logado.getId())) {
             log.warn("[USUARIO ATUALIZAR] ACESSO NEGADO — '{}' tentou alterar dados de '{}'",
@@ -278,6 +281,66 @@ public class UsuarioServiceImpl implements UsuarioService {
                 alvo.getNome(), alvo.getId(), adminLogado.getNome());
     }
 
+    @Override
+    @Transactional
+    public void deletar(Usuario adminLogado, Long id) {
+        log.info("[USUARIO DELETAR] Usuário '{}' (id={}, papel={}) solicitando exclusão do usuário id={}",
+                adminLogado.getNome(), adminLogado.getId(), adminLogado.getPapel(), id);
+
+        // Apenas ADMIN e SUPERUSUARIO podem excluir
+        if (adminLogado.getPapel() != Papel.ADMIN && adminLogado.getPapel() != Papel.SUPERUSUARIO) {
+            log.warn("[USUARIO DELETAR] ACESSO NEGADO — papel '{}' tentou deletar usuário id={}", adminLogado.getPapel(), id);
+            throw new ForbiddenException("Apenas administradores ou superusuários podem excluir usuários.");
+        }
+
+        Usuario alvo = usuarioRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
+
+        // O superusuário não pode ser excluído
+        if (alvo.getPapel() == Papel.SUPERUSUARIO) {
+            log.warn("[USUARIO DELETAR] TENTATIVA BLOQUEADA — Usuário '{}' tentou excluir o SUPERUSUÁRIO '{}'",
+                    adminLogado.getEmail(), alvo.getEmail());
+            throw new BusinessException("O superusuário não pode ser excluído do sistema.");
+        }
+
+        // Não pode deletar a si próprio
+        if (Objects.equals(alvo.getId(), adminLogado.getId())) {
+            log.warn("[USUARIO DELETAR] '{}' tentou deletar a própria conta", adminLogado.getEmail());
+            throw new BusinessException("Você não pode excluir sua própria conta.");
+        }
+
+        // Administrador comum não pode excluir outro Administrador (apenas SUPERUSUARIO pode)
+        if (alvo.getPapel() == Papel.ADMIN && adminLogado.getPapel() != Papel.SUPERUSUARIO) {
+            log.warn("[USUARIO DELETAR] ACESSO NEGADO — Administrador '{}' tentou excluir outro Administrador '{}'",
+                    adminLogado.getEmail(), alvo.getEmail());
+            throw new ForbiddenException("Apenas o superusuário pode excluir outro administrador.");
+        }
+
+        // Limpeza de vínculos para garantir integridade referencial antes da deleção
+        // 1. Validar se o usuário possui chamados como solicitante
+        List<thickethub.domain.model.Chamado> chamadosComoSolicitante = chamadoRepository.findBySolicitante_Id(alvo.getId());
+        if (!chamadosComoSolicitante.isEmpty()) {
+            log.warn("[USUARIO DELETAR] BLOQUEADO — Usuário '{}' possui {} chamados como solicitante",
+                    alvo.getEmail(), chamadosComoSolicitante.size());
+            throw new BusinessException("Não é possível excluir um usuário que possui chamados registrados no sistema. Desative a conta para manter o histórico.");
+        }
+
+        // 2. Desvincular como técnico dos chamados onde foi atribuído
+        List<thickethub.domain.model.Chamado> chamadosComoTecnico = chamadoRepository.findByTecnico_Id(alvo.getId());
+        for (thickethub.domain.model.Chamado c : chamadosComoTecnico) {
+            c.setTecnico(null);
+            chamadoRepository.save(c);
+        }
+
+        // 3. Notificações do usuário (lidas e não lidas)
+        notificacaoRepository.deleteByUsuario_Id(alvo.getId());
+
+        usuarioRepository.delete(alvo);
+        auditar(adminLogado, "usuario.deletar", "excluido=" + alvo.getEmail() + "; papel=" + alvo.getPapel());
+        log.info("[USUARIO DELETAR] SUCESSO — Usuário '{}' (id={}, email={}) excluído permanentemente por '{}'",
+                alvo.getNome(), alvo.getId(), alvo.getEmail(), adminLogado.getNome());
+    }
+
     // ============================================================
     // resetarSenhaManual()
     // ============================================================
@@ -289,7 +352,6 @@ public class UsuarioServiceImpl implements UsuarioService {
 
         boolean podeResetar = solicitante.getPapel() == Papel.ADMIN
                 || solicitante.getPapel() == Papel.SUPERUSUARIO
-                || solicitante.getPapel() == Papel.SUPER
                 || solicitante.getPapel() == Papel.TECNICO;
 
         if (!podeResetar) {

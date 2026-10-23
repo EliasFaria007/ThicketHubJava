@@ -9,6 +9,8 @@ public record ComentarioResponse(
         Long chamadoId,
         Long autorId,
         String autorNome,
+        String autorPapel,
+        String autorEmail,
         String mensagem,
         Boolean flagInterno,
         LocalDateTime dataCriacao
@@ -20,6 +22,8 @@ public record ComentarioResponse(
                 c.getChamado() != null ? c.getChamado().getId() : null,
                 c.getAutor() != null ? c.getAutor().getId() : null,
                 c.getAutor() != null ? c.getAutor().getNome() : null,
+                c.getAutor() != null && c.getAutor().getPapel() != null ? c.getAutor().getPapel().name() : null,
+                c.getAutor() != null ? c.getAutor().getEmail() : null,
                 c.getMensagem(),
                 c.getFlagInterno(),
                 c.getDataCriacao()

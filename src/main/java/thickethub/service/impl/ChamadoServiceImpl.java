@@ -96,6 +96,8 @@ public class ChamadoServiceImpl implements ChamadoService {
         registrarHistorico(chamado, solicitante, TipoHistorico.ABERTURA, "Chamado criado pelo solicitante");
         auditar(solicitante, "chamado.criar", "protocolo=" + chamado.getProtocolo());
         notificarSetor(chamado, "Novo chamado aberto: " + chamado.getProtocolo() + " - " + chamado.getTitulo());
+        notificarUsuario(solicitante, chamado, "Seu chamado " + chamado.getProtocolo() + " foi registrado com sucesso.");
+        dispararWebhookSeConfigurado(chamado);
 
         log.info("Chamado criado: protocolo={}, solicitanteId={}", chamado.getProtocolo(), solicitante.getId());
         return ChamadoDetalheResponse.de(chamado);
@@ -160,7 +162,12 @@ public class ChamadoServiceImpl implements ChamadoService {
         validarTecnicoDoSetor(logado, chamado);
 
         if (request.status() != null) {
+            boolean mudouStatus = request.status() != chamado.getStatus();
             chamado.setStatus(request.status());
+            if (mudouStatus) {
+                notificarUsuario(chamado.getSolicitante(), chamado,
+                        "Status do chamado " + chamado.getProtocolo() + " alterado para " + request.status());
+            }
         }
         if (request.prioridade() != null) {
             chamado.setPrioridade(request.prioridade());
@@ -236,6 +243,8 @@ public class ChamadoServiceImpl implements ChamadoService {
 
         registrarHistorico(chamado, user, TipoHistorico.PAUSA, "Chamado pausado — SLA congelado");
         auditar(user, "chamado.pausar", "protocolo=" + chamado.getProtocolo());
+        notificarUsuario(chamado.getSolicitante(), chamado,
+                "O atendimento do chamado " + chamado.getProtocolo() + " foi pausado por " + user.getNome());
 
         return ChamadoDetalheResponse.de(chamado);
     }
@@ -256,6 +265,8 @@ public class ChamadoServiceImpl implements ChamadoService {
 
         registrarHistorico(chamado, user, TipoHistorico.RETOMADA, "Chamado retomado — SLA reativado");
         auditar(user, "chamado.retomar", "protocolo=" + chamado.getProtocolo());
+        notificarUsuario(chamado.getSolicitante(), chamado,
+                "O atendimento do chamado " + chamado.getProtocolo() + " foi retomado por " + user.getNome());
 
         return ChamadoDetalheResponse.de(chamado);
     }
@@ -313,6 +324,8 @@ public class ChamadoServiceImpl implements ChamadoService {
         registrarHistorico(chamado, user, TipoHistorico.DEVOLUCAO, "Chamado devolvido para a fila: " + request.motivo());
         auditar(user, "chamado.devolver", "protocolo=" + chamado.getProtocolo() + "; motivo=" + request.motivo());
         notificarSetor(chamado, "Chamado " + chamado.getProtocolo() + " devolvido para a fila do setor.");
+        notificarUsuario(chamado.getSolicitante(), chamado,
+                "Chamado " + chamado.getProtocolo() + " devolvido para a fila geral: " + request.motivo());
 
         return ChamadoDetalheResponse.de(chamado);
     }
@@ -346,6 +359,8 @@ public class ChamadoServiceImpl implements ChamadoService {
         registrarHistorico(chamado, logado, TipoHistorico.ENCAMINHAMENTO, "Chamado encaminhado: " + request.motivo());
         auditar(logado, "chamado.encaminhar", "protocolo=" + chamado.getProtocolo() + "; motivo=" + request.motivo());
         notificarSetor(chamado, "Chamado " + chamado.getProtocolo() + " encaminhado para o setor " + chamado.getSetor());
+        notificarUsuario(chamado.getSolicitante(), chamado,
+                "Seu chamado " + chamado.getProtocolo() + " foi encaminhado para atendimento no setor " + chamado.getSetor());
 
         return ChamadoDetalheResponse.de(chamado);
     }
@@ -356,7 +371,7 @@ public class ChamadoServiceImpl implements ChamadoService {
     @Override
     @Transactional
     public ChamadoDetalheResponse reabrirChamado(Usuario user, Long chamadoId, String justificativa) {
-        boolean isAdm = user.getPapel() == Papel.ADMIN || user.getPapel() == Papel.SUPERUSUARIO || user.getPapel() == Papel.SUPER;
+        boolean isAdm = user.getPapel() == Papel.ADMIN || user.getPapel() == Papel.SUPERUSUARIO ;
         if (!isAdm) {
             throw new ForbiddenException("Apenas administradores podem reabrir chamados.");
         }
@@ -401,13 +416,35 @@ public class ChamadoServiceImpl implements ChamadoService {
             throw new BusinessException("Apenas chamados resolvidos podem ser avaliados.");
         }
 
+        // Sugestão 2: Verificação de justificativa obrigatória para notas baixas (1 ou 2)
+        boolean justificativaObrigatoria = Boolean.TRUE.equals(thickethub.controller.ConfiguracaoController.GERAL_CONFIG.get("justificativaNotaBaixaObrigatoria"));
+        boolean alertaNotaBaixa = Boolean.TRUE.equals(thickethub.controller.ConfiguracaoController.GERAL_CONFIG.get("alertaNotaBaixaAtivo"));
+
+        if (justificativaObrigatoria && request.nota() <= 2) {
+            if (request.comentario() == null || request.comentario().trim().length() < 5) {
+                throw new BusinessException("Para avaliações com nota 1 ou 2, é obrigatório informar uma justificativa com o motivo da insatisfação.");
+            }
+        }
+
         chamado.setAvaliacao(request.nota());
         chamado.setStatus(StatusChamado.FECHADO);
         chamado.setDataFechamento(LocalDateTime.now());
         chamadoRepository.save(chamado);
 
-        registrarHistorico(chamado, solicitante, TipoHistorico.STATUS, "Atendimento avaliado com nota " + request.nota());
+        String descHistorico = "Atendimento avaliado com nota " + request.nota() + (request.comentario() != null && !request.comentario().isBlank() ? " — Justificativa: " + request.comentario() : "");
+        registrarHistorico(chamado, solicitante, TipoHistorico.STATUS, descHistorico);
         auditar(solicitante, "chamado.avaliar", "protocolo=" + chamado.getProtocolo() + "; nota=" + request.nota());
+
+        // Se nota baixa e alerta ativo, notifica administradores e superusuários
+        if (alertaNotaBaixa && request.nota() <= 2) {
+            String msgAlerta = "ALERTA DE INSATISFAÇÃO: Chamado " + chamado.getProtocolo() + " avaliado com nota " + request.nota() + "/5 pelo solicitante " + solicitante.getNome() + (request.comentario() != null ? ". Motivo: " + request.comentario() : "");
+            List<Usuario> gestores = usuarioRepository.findAll().stream()
+                    .filter(u -> u.getPapel() == Papel.ADMIN || u.getPapel() == Papel.SUPERUSUARIO)
+                    .toList();
+            for (Usuario g : gestores) {
+                notificarUsuario(g, chamado, msgAlerta);
+            }
+        }
 
         return ChamadoDetalheResponse.de(chamado);
     }
@@ -433,16 +470,29 @@ public class ChamadoServiceImpl implements ChamadoService {
                 .dataCriacao(LocalDateTime.now())
                 .build();
 
+        chamado.getComentarios().add(comentario);
         comentarioRepository.save(comentario);
         registrarHistorico(chamado, autor, TipoHistorico.COMENTARIO,
                 (flagInterno ? "[Nota Interna] " : "") + "Comentário adicionado");
 
-        // Notificar solicitante ou técnico dependendo de quem comentou
+        // Notificar participantes da interação
         if (!flagInterno) {
-            if (autor.getId().equals(chamado.getSolicitante().getId()) && chamado.getTecnico() != null) {
-                notificarUsuario(chamado.getTecnico(), chamado, "Novo comentário no chamado " + chamado.getProtocolo());
-            } else if (!autor.getId().equals(chamado.getSolicitante().getId())) {
-                notificarUsuario(chamado.getSolicitante(), chamado, "Nova resposta no chamado " + chamado.getProtocolo());
+            // Se quem comentou não é o solicitante, notificar o solicitante
+            if (chamado.getSolicitante() != null && !autor.getId().equals(chamado.getSolicitante().getId())) {
+                notificarUsuario(chamado.getSolicitante(), chamado,
+                        "Nova resposta no chamado " + chamado.getProtocolo() + " por " + autor.getNome());
+            }
+
+            // Se quem comentou não é o técnico atribuído (e existe técnico atribuído), notificar o técnico
+            if (chamado.getTecnico() != null && !autor.getId().equals(chamado.getTecnico().getId())) {
+                notificarUsuario(chamado.getTecnico(), chamado,
+                        "Novo comentário no chamado " + chamado.getProtocolo() + " por " + autor.getNome());
+            }
+        } else {
+            // Nota interna: notificar o técnico atribuído caso o autor seja diferente do técnico
+            if (chamado.getTecnico() != null && !autor.getId().equals(chamado.getTecnico().getId())) {
+                notificarUsuario(chamado.getTecnico(), chamado,
+                        "Nova nota interna no chamado " + chamado.getProtocolo() + " por " + autor.getNome());
             }
         }
 
@@ -526,7 +576,7 @@ public class ChamadoServiceImpl implements ChamadoService {
     }
 
     private void validarTecnicoDoSetor(Usuario user, Chamado chamado) {
-        if (user.getPapel() == Papel.ADMIN || user.getPapel() == Papel.SUPERUSUARIO || user.getPapel() == Papel.SUPER) {
+        if (user.getPapel() == Papel.ADMIN || user.getPapel() == Papel.SUPERUSUARIO ) {
             return;
         }
         if (user.getPapel() != Papel.TECNICO || user.getSetoresLiberados() == null || !user.getSetoresLiberados().contains(chamado.getSetor())) {
@@ -605,6 +655,44 @@ public class ChamadoServiceImpl implements ChamadoService {
             messagingTemplate.convertAndSend("/topic/setor/" + chamado.getSetor(), mensagem);
         } catch (Exception e) {
             log.warn("Falha ao enviar broadcast de setor: {}", e.getMessage());
+        }
+    }
+
+    private void dispararWebhookSeConfigurado(Chamado chamado) {
+        try {
+            boolean ativo = Boolean.TRUE.equals(thickethub.controller.ConfiguracaoController.GERAL_CONFIG.get("webhookAtivo"));
+            if (!ativo) return;
+
+            String url = (String) thickethub.controller.ConfiguracaoController.GERAL_CONFIG.get("webhookUrl");
+            if (url == null || url.isBlank() || !url.startsWith("http")) return;
+
+            String nivelMinimo = (String) thickethub.controller.ConfiguracaoController.GERAL_CONFIG.getOrDefault("webhookNivelMinimo", "CRITICA");
+            boolean deveEnviar = "TODAS".equalsIgnoreCase(nivelMinimo)
+                    || ("ALTA".equalsIgnoreCase(nivelMinimo) && (chamado.getPrioridade() == PrioridadeChamado.ALTA || chamado.getPrioridade() == PrioridadeChamado.CRITICA))
+                    || ("CRITICA".equalsIgnoreCase(nivelMinimo) && chamado.getPrioridade() == PrioridadeChamado.CRITICA);
+
+            if (!deveEnviar) return;
+
+            log.info("[WEBHOOK INSTITUCIONAL] Disparando alerta de prioridade {} para chamado {}", chamado.getPrioridade(), chamado.getProtocolo());
+            // Execução assíncrona ou mock de envio seguro
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    var httpClient = java.net.http.HttpClient.newHttpClient();
+                    String json = String.format("{\"title\":\"[ALERTA %s] Novo Chamado %s\",\"text\":\"Título: %s\\nSetor: %s\\nSolicitante: %s\"}",
+                            chamado.getPrioridade(), chamado.getProtocolo(), chamado.getTitulo(), chamado.getSetor(), chamado.getSolicitante().getNome());
+                    var httpRequest = java.net.http.HttpRequest.newBuilder()
+                            .uri(java.net.URI.create(url))
+                            .header("Content-Type", "application/json")
+                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
+                            .timeout(java.time.Duration.ofSeconds(5))
+                            .build();
+                    httpClient.send(httpRequest, java.net.http.HttpResponse.BodyHandlers.discarding());
+                } catch (Exception ex) {
+                    log.warn("[WEBHOOK INSTITUCIONAL] Erro ao enviar webhook para {}: {}", url, ex.getMessage());
+                }
+            });
+        } catch (Exception e) {
+            log.warn("[WEBHOOK INSTITUCIONAL] Falha ao processar webhook: {}", e.getMessage());
         }
     }
 }

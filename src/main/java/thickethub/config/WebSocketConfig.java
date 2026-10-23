@@ -20,7 +20,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns(
                         "https://thickethub.defensoria.mg.gov.br",
-                        "http://localhost:5173")
+                        "http://localhost:5173",
+                        "https://thicket-hub-front.vercel.app",
+                        "https://www.thickethub.dev.br"
+                        )
                 .withSockJS();
     }
 

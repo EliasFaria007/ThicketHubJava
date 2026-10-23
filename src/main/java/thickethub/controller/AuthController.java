@@ -25,6 +25,13 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.sucesso(response, "Login realizado com sucesso", 200));
     }
 
+    @PostMapping("/microsoft")
+    public ResponseEntity<ApiResponse<AuthResponse>> loginMicrosoft(@Valid @RequestBody MicrosoftLoginRequest request, HttpServletRequest httpRequest) {
+        String ip = SecurityUtils.extrairIp(httpRequest);
+        AuthResponse response = authService.loginMicrosoft(request, ip);
+        return ResponseEntity.ok(ApiResponse.sucesso(response, "Login institucional Microsoft realizado com sucesso", 200));
+    }
+
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<AuthResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         AuthResponse response = authService.refresh(request);

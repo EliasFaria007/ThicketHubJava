@@ -18,7 +18,7 @@ public class ChamadoSecurity {
     private final ChamadoRepository chamadoRepository;
 
     private boolean isAdministrador(Usuario user) {
-        return user != null && (user.getPapel() == Papel.ADMIN || user.getPapel() == Papel.SUPERUSUARIO || user.getPapel() == Papel.SUPER);
+        return user != null && (user.getPapel() == Papel.ADMIN || user.getPapel() == Papel.SUPERUSUARIO );
     }
 
     @Transactional(readOnly = true)

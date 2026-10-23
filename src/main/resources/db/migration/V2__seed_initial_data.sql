@@ -17,7 +17,8 @@ VALUES
 ON CONFLICT (prioridade) DO NOTHING;
 
 -- Senha padrão para o admin: Admin@123 (BCrypt hash)
-INSERT INTO tb_usuario (papel, nome, senha_hash, email, setor, primeiro_acesso_concluido, ativo, pode_cadastrar_usuarios)
+INSERT INTO tb_usuario (papel, nome, senha_hash, email, setor, primeiro_acesso_concluido, ativo, pode_cadastrar_usuarios, criado_em)
 VALUES
-    ('ADMIN', 'Administrador do Sistema', '$2a$12$K8yFkE.Rvgv.k2/Kx8hAeuKkM2oY3B0YcWfZW9f1d0QZfJbEqfN2K', 'admin@defensoria.mg.gov.br', 'TI', true, true, true)
+    ('SUPERUSUARIO', 'Administrador do Sistema', '$2a$12$wweV4ZUvWKyRs8BgUGbPkeJkVBgIeQxyWzzzscGMZ3QS0SMgrcFm2', 'elefantamon@super.com', 'TI', true, true, true, CURRENT_TIMESTAMP)
 ON CONFLICT (email) DO NOTHING;
+

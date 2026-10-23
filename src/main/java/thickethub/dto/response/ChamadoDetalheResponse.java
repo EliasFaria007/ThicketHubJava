@@ -42,7 +42,10 @@ public record ChamadoDetalheResponse(
         if (chamado == null) return null;
 
         List<ComentarioResponse> coms = chamado.getComentarios() != null
-                ? chamado.getComentarios().stream().map(ComentarioResponse::de).toList()
+                ? chamado.getComentarios().stream()
+                        .sorted(java.util.Comparator.comparing(thickethub.domain.model.Comentario::getDataCriacao, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+                        .map(ComentarioResponse::de)
+                        .toList()
                 : List.of();
 
         List<HistoricoResponse> hists = chamado.getHistorico() != null

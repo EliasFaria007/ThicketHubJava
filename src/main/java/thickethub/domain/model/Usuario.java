@@ -80,4 +80,15 @@ public class Usuario {
     @Column(name = "setores_liberados")
     @Builder.Default
     private Set<String> setoresLiberados = new HashSet<>();
+
+    @PrePersist
+    public void prePersist() {
+        if (this.criadoEm == null) {
+            this.criadoEm = LocalDateTime.now();
+        }
+        if (this.ativo == null) {
+            this.ativo = true;
+        }
+    }
 }
+

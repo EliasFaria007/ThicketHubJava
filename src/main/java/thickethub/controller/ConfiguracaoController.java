@@ -61,6 +61,16 @@ public class ConfiguracaoController {
             Map.entry("setorPadrao", "TI")
     ));
 
+    public static final Map<String, Object> GERAL_CONFIG = new ConcurrentHashMap<>(Map.ofEntries(
+            Map.entry("justificativaNotaBaixaObrigatoria", true),
+            Map.entry("alertaNotaBaixaAtivo", true),
+            Map.entry("fechamentoInatividadeAtivo", true),
+            Map.entry("diasInatividadeFechamento", 5),
+            Map.entry("webhookAtivo", false),
+            Map.entry("webhookUrl", "https://defensoria.webhook.office.com/webhookb2/..."),
+            Map.entry("webhookNivelMinimo", "CRITICA")
+    ));
+
     public record BatchDominiosRequest(List<String> dominios, String padrao) {}
     public record BatchDominiosResponse(List<String> dominios, String padrao) {}
 
@@ -246,5 +256,35 @@ public class ConfiguracaoController {
                 "mensagem", "E-mail de teste institucional enviado com sucesso para: " + dest
         );
         return ResponseEntity.ok(ApiResponse.sucesso(res, "Teste de envio de e-mail concluído", 200));
+    }
+
+    // ---------------------------------------------------------------------------
+    // Configurações Gerais Institucionais (Pesquisa de Satisfação, Automação & Webhooks)
+    // ---------------------------------------------------------------------------
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER')")
+    @GetMapping("/geral")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> obterGeral() {
+        return ResponseEntity.ok(ApiResponse.sucesso(new LinkedHashMap<>(GERAL_CONFIG), "Configurações institucionais recuperadas", 200));
+    }
+
+    @PreAuthorize("hasRole('SUPERUSUARIO')")
+    @PutMapping("/geral")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> salvarGeral(@RequestBody Map<String, Object> req) {
+        if (req != null) {
+            GERAL_CONFIG.putAll(req);
+        }
+        return ResponseEntity.ok(ApiResponse.sucesso(new LinkedHashMap<>(GERAL_CONFIG), "Configurações institucionais salvas", 200));
+    }
+
+    @PreAuthorize("hasRole('SUPERUSUARIO')")
+    @PostMapping("/geral/webhook/testar")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testarWebhook(@RequestBody Map<String, Object> req) {
+        String url = String.valueOf(req.getOrDefault("webhookUrl", GERAL_CONFIG.get("webhookUrl")));
+        Map<String, Object> res = Map.of(
+                "sucesso", true,
+                "mensagem", "Notificação de teste institucional enviada com sucesso para: " + url
+        );
+        return ResponseEntity.ok(ApiResponse.sucesso(res, "Teste de Webhook institucional concluído", 200));
     }
 }

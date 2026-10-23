@@ -15,7 +15,7 @@ public class ChamadoSpecification {
         return (root, query, cb) -> {
             if (user == null) return cb.disjunction();
 
-            if (user.getPapel() == Papel.ADMIN || user.getPapel() == Papel.SUPERUSUARIO || user.getPapel() == Papel.SUPER) {
+            if (user.getPapel() == Papel.ADMIN || user.getPapel() == Papel.SUPERUSUARIO ) {
                 return cb.conjunction();
             }
 
@@ -70,10 +70,7 @@ public class ChamadoSpecification {
                 );
             }
             if ("resolvidos".equalsIgnoreCase(fila)) {
-                return cb.and(
-                    cb.equal(root.get("tecnico").get("id"), user.getId()),
-                    root.get("status").in(StatusChamado.RESOLVIDO, StatusChamado.FECHADO, StatusChamado.CONCLUIDO)
-                );
+                return root.get("status").in(StatusChamado.RESOLVIDO, StatusChamado.FECHADO, StatusChamado.CONCLUIDO);
             }
             if ("geral".equalsIgnoreCase(fila)) {
                 return cb.and(

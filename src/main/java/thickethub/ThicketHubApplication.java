@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @EnableScheduling
+@org.springframework.cache.annotation.EnableCaching
 @SpringBootApplication
 public class ThicketHubApplication {
 
