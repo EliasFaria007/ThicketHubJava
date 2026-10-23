@@ -27,7 +27,7 @@ WORKDIR /app
 RUN addgroup -S thicketgroup && adduser -S thicketuser -G thicketgroup
 
 # Copia o JAR empacotado pelo Maven (thickethub.jar)
-COPY --from=builder /app/target/thickethub.jar app.jar
+COPY --from=builder /app/target/*.jar app.jar
 
 # Ajuste de permissões de arquivo
 RUN chown -R thicketuser:thicketgroup /app
