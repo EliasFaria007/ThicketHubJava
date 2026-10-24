@@ -159,21 +159,28 @@ public class AuthServiceImpl implements AuthService {
         String finalEmail = email;
         String finalNome = (nome != null && !nome.isBlank()) ? nome : email.substring(0, email.indexOf("@"));
 
-        Usuario usuario = usuarioRepository.findByEmail(email).orElseGet(() -> {
-            log.info("[LOGIN MICROSOFT] Provisionando novo usuário institucional via SSO Microsoft: {}", finalEmail);
-            Usuario novo = Usuario.builder()
-                    .email(finalEmail)
-                    .nome(finalNome)
-                    .papel(thickethub.domain.enums.Papel.USUARIO)
-                    .ativo(true)
-                    .primeiroAcessoConcluido(true)
-                    .termosVersao("1.0")
-                    .termosAceitosEm(LocalDateTime.now())
-                    .senhaHash(passwordEncoder.encode(UUID.randomUUID().toString()))
-                    .criadoEm(LocalDateTime.now())
-                    .build();
-            return usuarioRepository.save(novo);
-        });
+        Usuario usuario;
+        try {
+            usuario = usuarioRepository.findByEmail(email).orElseGet(() -> {
+                log.info("[LOGIN MICROSOFT] Provisionando novo usuário institucional via SSO Microsoft: {}", finalEmail);
+                Usuario novo = Usuario.builder()
+                        .email(finalEmail)
+                        .nome(finalNome)
+                        .papel(thickethub.domain.enums.Papel.USUARIO)
+                        .ativo(true)
+                        .primeiroAcessoConcluido(true)
+                        .termosVersao("1.0")
+                        .termosAceitosEm(LocalDateTime.now())
+                        .senhaHash(passwordEncoder.encode(UUID.randomUUID().toString()))
+                        .criadoEm(LocalDateTime.now())
+                        .build();
+                return usuarioRepository.saveAndFlush(novo);
+            });
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.info("[LOGIN MICROSOFT] Concorrência detectada no provisionamento para {}. Buscando usuário existente.", finalEmail);
+            usuario = usuarioRepository.findByEmail(email)
+                    .orElseThrow(() -> new BusinessException("Erro de concorrência ao autenticar usuário institucional."));
+        }
 
         if (!Boolean.TRUE.equals(usuario.getAtivo())) {
             log.warn("[LOGIN MICROSOFT] NEGADO — conta desativada para usuário id: {}, email: {}", usuario.getId(), email);
