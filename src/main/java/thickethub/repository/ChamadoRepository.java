@@ -1,5 +1,9 @@
 package thickethub.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -12,7 +16,18 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ChamadoRepository extends JpaRepository<Chamado, Long>, JpaSpecificationExecutor<Chamado> {
+
+    @Override
+    @EntityGraph(attributePaths = {"solicitante", "tecnico", "servico"})
+    Page<Chamado> findAll(Specification<Chamado> spec, Pageable pageable);
+
+    @Override
+    @EntityGraph(attributePaths = {"solicitante", "tecnico", "servico"})
+    Optional<Chamado> findById(Long id);
+
+    @EntityGraph(attributePaths = {"solicitante", "tecnico", "servico"})
     Optional<Chamado> findByProtocolo(String protocolo);
+
     boolean existsByProtocolo(String protocolo);
     List<Chamado> findBySolicitante_Id(Long solicitanteId);
     List<Chamado> findByTecnico_Id(Long tecnicoId);

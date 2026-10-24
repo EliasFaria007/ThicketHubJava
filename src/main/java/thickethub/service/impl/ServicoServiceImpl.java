@@ -25,6 +25,7 @@ public class ServicoServiceImpl implements ServicoService {
     private final SlaConfigRepository slaConfigRepository;
 
     @Override
+    @org.springframework.cache.annotation.CacheEvict(value = "servicos", allEntries = true)
     @Transactional
     public ServicoResponse criar(ServicoRequest request) {
         if (servicoRepository.existsByNomeAndSetor(request.nome(), request.setor())) {
@@ -62,6 +63,7 @@ public class ServicoServiceImpl implements ServicoService {
     }
 
     @Override
+    @org.springframework.cache.annotation.Cacheable(value = "servicos", key = "#apenasAtivos != null ? #apenasAtivos : false")
     @Transactional(readOnly = true)
     public List<ServicoResponse> listarTodos(Boolean apenasAtivos) {
         List<Servico> lista = Boolean.TRUE.equals(apenasAtivos)
@@ -79,6 +81,7 @@ public class ServicoServiceImpl implements ServicoService {
     }
 
     @Override
+    @org.springframework.cache.annotation.CacheEvict(value = "servicos", allEntries = true)
     @Transactional
     public ServicoResponse atualizar(Long id, ServicoRequest request) {
         Servico s = servicoRepository.findById(id)
@@ -96,6 +99,7 @@ public class ServicoServiceImpl implements ServicoService {
     }
 
     @Override
+    @org.springframework.cache.annotation.CacheEvict(value = "servicos", allEntries = true)
     @Transactional
     public void desativar(Long id) {
         Servico s = servicoRepository.findById(id)
@@ -105,6 +109,7 @@ public class ServicoServiceImpl implements ServicoService {
     }
 
     @Override
+    @org.springframework.cache.annotation.CacheEvict(value = "servicos", allEntries = true)
     @Transactional
     public void ativar(Long id) {
         Servico s = servicoRepository.findById(id)
