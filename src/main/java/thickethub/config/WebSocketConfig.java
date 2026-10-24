@@ -1,6 +1,5 @@
 package thickethub.config;
 
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -12,18 +11,17 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     /**
-     * Endpoint de handshake: é por aqui que o frontend "sobe" a conexão.
-     * SockJS é o fallback para navegadores/redes que bloqueiam WebSocket puro.
+     * Endpoint de handshake:
+     * Registra endpoint nativo para 'new WebSocket("wss://...")'
+     * e com fallback SockJS para clientes que utilizam a biblioteca SockJS.
      */
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns(
-                        "https://thickethub.defensoria.mg.gov.br",
-                        "http://localhost:5173",
-                        "https://thicket-hub-front.vercel.app",
-                        "https://www.thickethub.dev.br"
-                        )
+                .setAllowedOriginPatterns("*");
+
+        registry.addEndpoint("/ws")
+                .setAllowedOriginPatterns("*")
                 .withSockJS();
     }
 

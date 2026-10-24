@@ -28,21 +28,30 @@ public class CorsConfig {
                 "https://thicket-hub-front.vercel.app",
                 "https://*.vercel.app",
                 "https://*.northflank.app",
+                "https://*.code.run",
+                "http://*.code.run",
                 "https://thickethub.dev.br",
                 "https://www.thickethub.dev.br"
         ));
 
         if (allowedOriginsEnv != null && !allowedOriginsEnv.isBlank()) {
-            Arrays.stream(allowedOriginsEnv.split(","))
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .forEach(origins::add);
+            if ("*".equals(allowedOriginsEnv.trim())) {
+                origins = List.of("*");
+            } else {
+                Arrays.stream(allowedOriginsEnv.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .forEach(origins::add);
+            }
+        } else {
+            // Em nuvem (Vercel, Northflank, etc.), permite qualquer origem dinamicamente com credenciais
+            origins.add("*");
         }
 
         config.setAllowedOriginPatterns(origins);
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
-        config.setExposedHeaders(List.of("Authorization"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization", "Content-Disposition"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
