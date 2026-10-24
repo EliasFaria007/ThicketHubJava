@@ -196,9 +196,12 @@ public class ChamadoServiceImpl implements ChamadoService {
         validarTecnicoDoSetor(tecnico, chamado);
 
         if (chamado.getTecnico() != null) {
+            String nomeTecnico = chamado.getTecnico().getNome();
             log.warn("[CHAMADO ASSUMIR] Chamado '{}' já está atribuído ao técnico '{}'",
-                    chamado.getProtocolo(), chamado.getTecnico().getNome());
-            throw new ConflictException("Chamado já atribuído a outro técnico.");
+                    chamado.getProtocolo(), nomeTecnico);
+            String msg = "Chamado assumido pelo técnico: " + nomeTecnico;
+            notificarUsuario(tecnico, chamado, msg);
+            throw new ConflictException(msg);
         }
         if (chamado.getStatus() != StatusChamado.ABERTO && chamado.getStatus() != StatusChamado.AGUARDANDO) {
             log.warn("[CHAMADO ASSUMIR] Status inválido — chamado '{}' está como {}", chamado.getProtocolo(), chamado.getStatus());
