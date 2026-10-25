@@ -172,7 +172,10 @@ public class ChamadoServiceImpl implements ChamadoService {
         if (request.prioridade() != null) {
             chamado.setPrioridade(request.prioridade());
         }
-        if (request.oQueFoiFeito() != null && !request.oQueFoiFeito().isBlank()) {
+        if (request.descricao() != null) {
+            chamado.setDescricao(request.descricao());
+        }
+        if (request.oQueFoiFeito() != null) {
             chamado.setOQueFoiFeito(request.oQueFoiFeito());
         }
 

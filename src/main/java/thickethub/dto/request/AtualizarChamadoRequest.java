@@ -7,5 +7,10 @@ public record AtualizarChamadoRequest(
         StatusChamado status,
         PrioridadeChamado prioridade,
         String oQueFoiFeito,
+        String descricao,
         Long versao
-) {}
+) {
+    public AtualizarChamadoRequest(StatusChamado status, PrioridadeChamado prioridade, String oQueFoiFeito, Long versao) {
+        this(status, prioridade, oQueFoiFeito, null, versao);
+    }
+}
