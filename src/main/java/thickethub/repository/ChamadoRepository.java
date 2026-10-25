@@ -29,12 +29,20 @@ public interface ChamadoRepository extends JpaRepository<Chamado, Long>, JpaSpec
     Optional<Chamado> findByProtocolo(String protocolo);
 
     boolean existsByProtocolo(String protocolo);
+
+    @EntityGraph(attributePaths = {"solicitante", "tecnico", "servico"})
     List<Chamado> findBySolicitante_Id(Long solicitanteId);
+
+    @EntityGraph(attributePaths = {"solicitante", "tecnico", "servico"})
     List<Chamado> findByTecnico_Id(Long tecnicoId);
+
     long countByStatus(StatusChamado status);
     long countBySetor(String setor);
+
+    @EntityGraph(attributePaths = {"solicitante", "tecnico", "servico"})
     List<Chamado> findByStatusIn(List<StatusChamado> statuses);
 
+    @EntityGraph(attributePaths = {"solicitante", "tecnico", "servico"})
     @Query("SELECT c FROM Chamado c WHERE c.status IN :statuses AND c.slaRodandoDesde IS NOT NULL")
     List<Chamado> findChamadosComSlaAtivo(@Param("statuses") List<StatusChamado> statuses);
 

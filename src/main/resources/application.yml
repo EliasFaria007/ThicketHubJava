@@ -13,7 +13,7 @@ server:
     context-path: /api
   compression:
     enabled: true
-    mime-types: application/json,text/html,text/xml,text/plain,application/xml
+    mime-types: application/json,text/html,text/xml,text/plain,application/xml,text/css,application/javascript,text/javascript
     min-response-size: 1024
 
 jwt:
