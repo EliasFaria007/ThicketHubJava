@@ -5,6 +5,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -84,13 +86,41 @@ public class GlobalExceptionHandler {
         return pd;
     }
 
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ProblemDetail handleRateLimit(RateLimitExceededException ex) {
+        log.warn("[RATE LIMIT] Limite de requisições excedido: {}", ex.getMessage());
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.TOO_MANY_REQUESTS);
+        pd.setTitle("Muitas requisições");
+        pd.setDetail(ex.getMessage());
+        pd.setType(URI.create("https://thickethub.defensoria.mg.gov.br/errors/too-many-requests"));
+        return pd;
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ProblemDetail handleMetodoNaoSuportado(HttpRequestMethodNotSupportedException ex) {
+        log.warn("[MÉTODO NÃO SUPORTADO] Método {} não é suportado para esta rota. Suportados: {}",
+                ex.getMethod(), ex.getSupportedHttpMethods());
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.METHOD_NOT_ALLOWED);
+        pd.setTitle("Método não permitido");
+        pd.setDetail("O método HTTP " + ex.getMethod() + " não é permitido para este endpoint.");
+        return pd;
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ProblemDetail handleMidiaNaoSuportada(HttpMediaTypeNotSupportedException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        pd.setTitle("Tipo de mídia não suportado");
+        pd.setDetail("O Content-Type fornecido não é suportado por este endpoint.");
+        return pd;
+    }
+
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGenerico(Exception ex) {
         log.error("[ERRO INTERNO] Exceção inesperada capturada — tipo: {} | mensagem: {}",
                 ex.getClass().getSimpleName(), ex.getMessage(), ex);
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.INTERNAL_SERVER_ERROR);
         pd.setTitle("Erro interno");
-        pd.setDetail("Ocorreu um erro inesperado: " + ex.getMessage());
+        pd.setDetail("Ocorreu um erro interno no servidor. Por favor, tente novamente mais tarde.");
         return pd;
     }
 }

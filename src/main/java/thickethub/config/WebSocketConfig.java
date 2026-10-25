@@ -10,6 +10,15 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
+    private static final String[] ORIGENS_PERMITIDAS = {
+            "https://*.thickethub.dev.br",
+            "https://thickethub.dev.br",
+            "https://*thickethub*.vercel.app",
+            "https://thicket-hub-front.vercel.app",
+            "http://localhost:*",
+            "http://127.0.0.1:*"
+    };
+
     /**
      * Endpoint de handshake:
      * Registra endpoint nativo para 'new WebSocket("wss://...")'
@@ -18,10 +27,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*");
+                .setAllowedOriginPatterns(ORIGENS_PERMITIDAS);
 
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(ORIGENS_PERMITIDAS)
                 .withSockJS();
     }
 

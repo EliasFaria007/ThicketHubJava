@@ -23,34 +23,30 @@ public class CorsConfig {
 
         List<String> origins = new ArrayList<>(List.of(
                 "https://thickethub.defensoria.mg.gov.br",
-                "http://localhost:5173",
-                "http://localhost:3000",
-                "https://thicket-hub-front.vercel.app",
-                "https://*.vercel.app",
-                "https://*.northflank.app",
-                "https://*.code.run",
-                "http://*.code.run",
                 "https://thickethub.dev.br",
-                "https://www.thickethub.dev.br"
+                "https://www.thickethub.dev.br",
+                "https://thicket-hub-front.vercel.app",
+                "http://localhost:5173",
+                "http://localhost:3000"
         ));
 
         if (allowedOriginsEnv != null && !allowedOriginsEnv.isBlank()) {
-            if ("*".equals(allowedOriginsEnv.trim())) {
-                origins = List.of("*");
-            } else {
-                Arrays.stream(allowedOriginsEnv.split(","))
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .forEach(origins::add);
-            }
-        } else {
-            // Em nuvem (Vercel, Northflank, etc.), permite qualquer origem dinamicamente com credenciais
-            origins.add("*");
+            Arrays.stream(allowedOriginsEnv.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty() && !"*".equals(s))
+                    .forEach(origins::add);
         }
 
-        config.setAllowedOriginPatterns(origins);
+        // Origens estritas permitidas (sem wildcard aberto para evitar roubo de sessão via CORS)
+        config.setAllowedOrigins(origins);
+        config.setAllowedOriginPatterns(List.of(
+                "https://*.thickethub.dev.br",
+                "https://*thickethub*.vercel.app",
+                "http://localhost:[*]",
+                "http://127.0.0.1:[*]"
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
-        config.setAllowedHeaders(List.of("*"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Requested-With", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"));
         config.setExposedHeaders(List.of("Authorization", "Content-Disposition"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);

@@ -16,6 +16,7 @@ import thickethub.dto.request.*;
 import thickethub.dto.response.AuthResponse;
 import thickethub.dto.response.UsuarioResponse;
 import thickethub.exception.BusinessException;
+import thickethub.exception.RateLimitExceededException;
 import thickethub.exception.ResourceNotFoundException;
 import thickethub.exception.UnauthorizedException;
 import thickethub.repository.AuditoriaRepository;
@@ -64,7 +65,7 @@ public class AuthServiceImpl implements AuthService {
             log.warn("[LOGIN] BLOQUEADO por rate limiting — email: {}, ip: {}", request.email(), ipOrigem);
             auditar(null, "auth.login.bloqueado",
                     "email=" + request.email() + "; ip=" + ipOrigem, ipOrigem);
-            throw new BusinessException(
+            throw new RateLimitExceededException(
                     "Muitas tentativas de login. Aguarde 15 minutos antes de tentar novamente.");
         }
 
@@ -77,6 +78,8 @@ public class AuthServiceImpl implements AuthService {
                     "email=" + request.email() + "; ip=" + ipOrigem, ipOrigem);
             throw new BadCredentialsException("E-mail ou senha inválidos.");
         }
+
+        rateLimiterService.limparRateLimit(request.email(), ipOrigem);
 
         Usuario usuario = usuarioRepository.findByEmail(request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
