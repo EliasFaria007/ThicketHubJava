@@ -42,17 +42,39 @@ public class DatabaseUrlEnvironmentPostProcessor implements EnvironmentPostProce
                 String path = uri.getPath() != null && !uri.getPath().isEmpty() ? uri.getPath() : "/thickethub_db";
                 String query = uri.getQuery();
 
+                Map<String, String> queryParams = new java.util.LinkedHashMap<>();
+                if (query != null && !query.isBlank()) {
+                    for (String part : query.split("&")) {
+                        String[] kv = part.split("=", 2);
+                        if (kv.length == 2) {
+                            queryParams.put(kv[0], kv[1]);
+                        } else if (kv.length == 1 && !kv[0].isBlank()) {
+                            queryParams.put(kv[0], "");
+                        }
+                    }
+                }
+
+                // Parâmetros críticos para Neon Serverless e PgBouncer (Transaction Pooling)
+                queryParams.putIfAbsent("sslmode", "require");
+                queryParams.putIfAbsent("prepareThreshold", "0");
+                queryParams.putIfAbsent("preparedStatementCacheQueries", "0");
+                queryParams.putIfAbsent("tcpKeepAlive", "true");
+                queryParams.putIfAbsent("connectTimeout", "10");
+                queryParams.putIfAbsent("socketTimeout", "45");
+
+                StringBuilder queryStr = new StringBuilder();
+                for (Map.Entry<String, String> entry : queryParams.entrySet()) {
+                    if (!queryStr.isEmpty()) queryStr.append("&");
+                    queryStr.append(entry.getKey()).append("=").append(entry.getValue());
+                }
+
                 StringBuilder jdbcUrl = new StringBuilder("jdbc:postgresql://")
                         .append(host)
                         .append(":")
                         .append(port)
-                        .append(path);
-
-                if (query != null && !query.isBlank()) {
-                    jdbcUrl.append("?").append(query);
-                } else {
-                    jdbcUrl.append("?sslmode=require");
-                }
+                        .append(path)
+                        .append("?")
+                        .append(queryStr);
 
                 Map<String, Object> props = new HashMap<>();
                 props.put("spring.datasource.url", jdbcUrl.toString());

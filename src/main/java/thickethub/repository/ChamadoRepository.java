@@ -19,6 +19,10 @@ public interface ChamadoRepository extends JpaRepository<Chamado, Long>, JpaSpec
 
     @Override
     @EntityGraph(attributePaths = {"solicitante", "tecnico", "servico"})
+    List<Chamado> findAll();
+
+    @Override
+    @EntityGraph(attributePaths = {"solicitante", "tecnico", "servico"})
     Page<Chamado> findAll(Specification<Chamado> spec, Pageable pageable);
 
     @Override
@@ -48,4 +52,7 @@ public interface ChamadoRepository extends JpaRepository<Chamado, Long>, JpaSpec
 
     @Query("SELECT COUNT(c) FROM Chamado c WHERE c.dataAbertura >= :inicio AND c.dataAbertura <= :fim")
     long countAbertosNoPeriodo(@Param("inicio") LocalDateTime inicio, @Param("fim") LocalDateTime fim);
+
+    @Query("SELECT c.status, COUNT(c) FROM Chamado c GROUP BY c.status")
+    List<Object[]> countChamadosAgrupadosPorStatus();
 }

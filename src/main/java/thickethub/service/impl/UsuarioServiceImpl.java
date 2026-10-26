@@ -176,7 +176,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Transactional(readOnly = true)
     public List<UsuarioResponse> listarTodos() {
         return usuarioRepository.findAll().stream()
-                .map(UsuarioResponse::de)
+                .map(UsuarioResponse::deResumo)
                 .toList();
     }
 

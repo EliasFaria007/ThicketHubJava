@@ -29,6 +29,29 @@ public record UsuarioResponse(
         return de(usuario, null);
     }
 
+    public static UsuarioResponse deResumo(Usuario usuario) {
+        if (usuario == null) return null;
+        return new UsuarioResponse(
+                usuario.getId(),
+                usuario.getNome(),
+                usuario.getEmail(),
+                usuario.getPapel(),
+                usuario.getSetor(),
+                usuario.getTelefone(),
+                usuario.getLocalidade(),
+                usuario.getPodeCadastrarUsuarios(),
+                usuario.getPrimeiroAcessoConcluido(),
+                usuario.getAtivo(),
+                usuario.getCriadoEm(),
+                usuario.getSetoresLiberados(),
+                null,
+                null, // omite base64 pesada na listagem geral para economizar memória e tráfego
+                usuario.getIncluirAssinaturaPadrao(),
+                usuario.getTermosVersao(),
+                usuario.getTermosAceitosEm()
+        );
+    }
+
     public static UsuarioResponse de(Usuario usuario, String senhaTemporaria) {
         if (usuario == null) return null;
         return new UsuarioResponse(

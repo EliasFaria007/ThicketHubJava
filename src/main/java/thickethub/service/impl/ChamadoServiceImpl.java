@@ -29,7 +29,9 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -552,17 +554,38 @@ public class ChamadoServiceImpl implements ChamadoService {
     @Override
     @Transactional(readOnly = true)
     public MetricasResponse obterMetricas(Usuario usuarioLogado) {
-        long totalChamados = chamadoRepository.count();
-        long abertos = chamadoRepository.countByStatus(StatusChamado.ABERTO);
-        long emAndamento = chamadoRepository.countByStatus(StatusChamado.EM_ATENDIMENTO) + chamadoRepository.countByStatus(StatusChamado.EM_ANDAMENTO);
-        long resolvidos = chamadoRepository.countByStatus(StatusChamado.RESOLVIDO);
-        long fechados = chamadoRepository.countByStatus(StatusChamado.FECHADO) + chamadoRepository.countByStatus(StatusChamado.CONCLUIDO);
-        long cancelados = chamadoRepository.countByStatus(StatusChamado.CANCELADO);
-        long pausados = chamadoRepository.countByStatus(StatusChamado.PAUSADO);
+        Map<StatusChamado, Long> porStatus = new EnumMap<>(StatusChamado.class);
+        long totalChamados = 0;
+        for (Object[] row : chamadoRepository.countChamadosAgrupadosPorStatus()) {
+            if (row != null && row.length >= 2 && row[0] instanceof StatusChamado st && row[1] instanceof Number num) {
+                long count = num.longValue();
+                porStatus.put(st, count);
+                totalChamados += count;
+            }
+        }
 
-        long totalUsuarios = usuarioRepository.count();
-        long totalTecnicos = usuarioRepository.countByPapel(Papel.TECNICO);
-        long totalAdmins = usuarioRepository.countByPapel(Papel.ADMIN) + usuarioRepository.countByPapel(Papel.SUPERUSUARIO);
+        long abertos = porStatus.getOrDefault(StatusChamado.ABERTO, 0L);
+        long emAndamento = porStatus.getOrDefault(StatusChamado.EM_ATENDIMENTO, 0L)
+                + porStatus.getOrDefault(StatusChamado.EM_ANDAMENTO, 0L);
+        long resolvidos = porStatus.getOrDefault(StatusChamado.RESOLVIDO, 0L);
+        long fechados = porStatus.getOrDefault(StatusChamado.FECHADO, 0L)
+                + porStatus.getOrDefault(StatusChamado.CONCLUIDO, 0L);
+        long cancelados = porStatus.getOrDefault(StatusChamado.CANCELADO, 0L);
+        long pausados = porStatus.getOrDefault(StatusChamado.PAUSADO, 0L);
+
+        Map<Papel, Long> porPapel = new EnumMap<>(Papel.class);
+        long totalUsuarios = 0;
+        for (Object[] row : usuarioRepository.countUsuariosAgrupadosPorPapel()) {
+            if (row != null && row.length >= 2 && row[0] instanceof Papel p && row[1] instanceof Number num) {
+                long count = num.longValue();
+                porPapel.put(p, count);
+                totalUsuarios += count;
+            }
+        }
+
+        long totalTecnicos = porPapel.getOrDefault(Papel.TECNICO, 0L);
+        long totalAdmins = porPapel.getOrDefault(Papel.ADMIN, 0L)
+                + porPapel.getOrDefault(Papel.SUPERUSUARIO, 0L);
 
         double percSla = totalChamados > 0 ? ((double) (resolvidos + fechados) / totalChamados) * 100.0 : 100.0;
 
