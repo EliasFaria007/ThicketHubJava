@@ -44,7 +44,9 @@ public class NotificacaoServiceImpl implements NotificacaoService {
                     .build();
 
             notificacaoRepository.save(n);
-            messagingTemplate.convertAndSendToUser(destinatario.getEmail(), "/queue/notificacoes", NotificacaoResponse.de(n));
+            NotificacaoResponse responseDto = NotificacaoResponse.de(n);
+            messagingTemplate.convertAndSendToUser(destinatario.getEmail(), "/queue/notificacoes", responseDto);
+            messagingTemplate.convertAndSend("/topic/chamados", responseDto);
         } catch (Exception e) {
             log.warn("Falha ao salvar/enviar notificação: {}", e.getMessage());
         }
