@@ -548,6 +548,26 @@ public class ChamadoServiceImpl implements ChamadoService {
         auditar(usuario, "chamado.vincular", "origem=" + origem.getProtocolo() + "; destino=" + destino.getProtocolo());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<HistoricoResponse> listarHistorico(Long chamadoId) {
+        buscarOuFalhar(chamadoId);
+        return historicoRepository.findByChamado_IdOrderByDataEventoAsc(chamadoId)
+                .stream()
+                .map(HistoricoResponse::de)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VinculoResponse> listarVinculos(Long chamadoId) {
+        buscarOuFalhar(chamadoId);
+        return chamadoVinculoRepository.findByChamadoOrigem_IdOrChamadoDestino_Id(chamadoId, chamadoId)
+                .stream()
+                .map(VinculoResponse::de)
+                .toList();
+    }
+
     // ============================================================
     // Métricas
     // ============================================================

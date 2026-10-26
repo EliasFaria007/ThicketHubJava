@@ -161,6 +161,18 @@ public class ChamadoController {
         return ResponseEntity.ok(ApiResponse.sucesso(null, "Chamados vinculados com sucesso", 200));
     }
 
+    @PreAuthorize("@chamadoSecurity.podeVisualizar(#id, authentication.name)")
+    @GetMapping("/{id}/historico")
+    public ResponseEntity<ApiResponse<List<HistoricoResponse>>> listarHistorico(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.sucesso(chamadoService.listarHistorico(id), "Histórico do chamado carregado", 200));
+    }
+
+    @PreAuthorize("@chamadoSecurity.podeVisualizar(#id, authentication.name)")
+    @GetMapping("/{id}/vinculos")
+    public ResponseEntity<ApiResponse<List<VinculoResponse>>> listarVinculos(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.sucesso(chamadoService.listarVinculos(id), "Vínculos do chamado carregados", 200));
+    }
+
     @GetMapping("/metricas")
     public ResponseEntity<ApiResponse<MetricasResponse>> metricas() {
         Usuario usuario = SecurityUtils.getUsuarioLogado();

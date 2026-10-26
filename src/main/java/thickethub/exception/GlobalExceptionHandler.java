@@ -50,6 +50,15 @@ public class GlobalExceptionHandler {
         return pd;
     }
 
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ProblemDetail handleRecursoNaoEncontrado(org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        log.warn("[ROTA NÃO ENCONTRADA] Endpoint solicitado não existe: {} {}", ex.getHttpMethod(), ex.getResourcePath());
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+        pd.setTitle("Rota não encontrada");
+        pd.setDetail("O endpoint solicitado não existe: " + ex.getResourcePath());
+        return pd;
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ProblemDetail handleRegraNegocio(BusinessException ex) {
         log.warn("[REGRA DE NEGÓCIO] Violação de regra: {}", ex.getMessage());

@@ -26,5 +26,7 @@ public interface ChamadoService {
     ComentarioResponse adicionarComentario(Usuario autor, Long chamadoId, NovoComentarioRequest request);
     List<ComentarioResponse> listarComentarios(Usuario usuario, Long chamadoId);
     void vincularChamado(Usuario usuario, Long chamadoOrigemId, VincularChamadoRequest request);
+    List<HistoricoResponse> listarHistorico(Long chamadoId);
+    List<VinculoResponse> listarVinculos(Long chamadoId);
     MetricasResponse obterMetricas(Usuario usuarioLogado);
 }
