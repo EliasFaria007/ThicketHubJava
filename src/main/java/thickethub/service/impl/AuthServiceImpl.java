@@ -148,13 +148,15 @@ public class AuthServiceImpl implements AuthService {
         email = email.toLowerCase().trim();
 
         // Validar domínio institucional cadastrado se houver domínios configurados
+        // Se o usuário já existir no banco (ex: superusuário ou usuário pré-cadastrado), permite o login diretamente
         String dominio = email.contains("@") ? email.substring(email.indexOf("@") + 1) : "";
         List<thickethub.domain.model.ConfigDominio> dominiosAtivos = configDominioRepository.findByAtivoTrue();
-        if (!dominiosAtivos.isEmpty()) {
+        boolean usuarioJaCadastrado = usuarioRepository.findByEmail(email).isPresent();
+        if (!dominiosAtivos.isEmpty() && !usuarioJaCadastrado) {
             boolean dominioValido = dominiosAtivos.stream().anyMatch(d -> d.getDominio().equalsIgnoreCase(dominio));
             if (!dominioValido) {
-                log.warn("[LOGIN MICROSOFT] Domínio não autorizado: {}", dominio);
-                throw new BusinessException("O domínio @" + dominio + " não é autorizado para login institucional.");
+                log.warn("[LOGIN MICROSOFT] Domínio não autorizado para auto-cadastro: {}", dominio);
+                throw new BusinessException("O domínio @" + dominio + " não é autorizado para auto-cadastro institucional.");
             }
         }
 
