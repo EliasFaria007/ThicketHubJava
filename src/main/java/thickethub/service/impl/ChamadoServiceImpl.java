@@ -67,10 +67,12 @@ public class ChamadoServiceImpl implements ChamadoService {
                 : slaConfigRepository.findByPrioridade(prioridade)
                 .orElse(null);
 
-        int slaAtendimento = servico.getSlaAtendimentoHoras() != null ? servico.getSlaAtendimentoHoras()
+        int slaAtendimento = servico.getSlaAtendimentoHoras() != null && servico.getSlaAtendimentoHoras() > 0
+                ? servico.getSlaAtendimentoHoras()
                 : (sla != null ? sla.getSlaAtendimentoHoras() : 4);
-        int slaResolucao = servico.getSlaResolucaoHoras() != null ? servico.getSlaResolucaoHoras()
-                : (sla != null ? sla.getSlaResolucaoHoras() : 24);
+        int slaResolucao = servico.getSlaResolucaoHoras() != null && servico.getSlaResolucaoHoras() > slaAtendimento
+                ? servico.getSlaResolucaoHoras()
+                : (sla != null ? sla.getSlaResolucaoHoras() : Math.max(slaAtendimento * 2, 24));
 
         LocalDateTime agora = LocalDateTime.now();
 
@@ -165,8 +167,13 @@ public class ChamadoServiceImpl implements ChamadoService {
 
         if (request.status() != null) {
             boolean mudouStatus = request.status() != chamado.getStatus();
-            chamado.setStatus(request.status());
             if (mudouStatus) {
+                if (request.status() == StatusChamado.PAUSADO || request.status() == StatusChamado.AGUARDANDO || request.status() == StatusChamado.RESOLVIDO || request.status() == StatusChamado.CANCELADO) {
+                    congelarSla(chamado);
+                } else if (chamado.getSlaRodandoDesde() == null) {
+                    chamado.setSlaRodandoDesde(LocalDateTime.now());
+                }
+                chamado.setStatus(request.status());
                 notificarUsuario(chamado.getSolicitante(), chamado,
                         "Status do chamado " + chamado.getProtocolo() + " alterado para " + request.status());
             }
