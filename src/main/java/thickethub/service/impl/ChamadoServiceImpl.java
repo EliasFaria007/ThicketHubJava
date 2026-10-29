@@ -24,6 +24,7 @@ import thickethub.repository.specification.ChamadoSpecification;
 import thickethub.security.SecurityUtils;
 import thickethub.service.ChamadoService;
 import thickethub.service.ConfiguracaoGeralService;
+import thickethub.service.EmailService;
 
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -50,6 +51,7 @@ public class ChamadoServiceImpl implements ChamadoService {
     private final UsuarioRepository usuarioRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final ConfiguracaoGeralService configuracaoGeralService;
+    private final EmailService emailService;
 
     private static final DateTimeFormatter PROTOCOLO_DATA = DateTimeFormatter.ofPattern("MMdd");
 
@@ -703,8 +705,36 @@ public class ChamadoServiceImpl implements ChamadoService {
                     .build();
             notificacaoRepository.save(n);
             messagingTemplate.convertAndSendToUser(destino.getEmail(), "/queue/notificacoes", mensagem);
+
+            // Disparo automático de e-mail institucional
+            if (destino.getEmail() != null && !destino.getEmail().isBlank() && destino.getEmail().contains("@")) {
+                String assunto = "[ThicketHub] " + chamado.getProtocolo() + " - " + mensagem;
+                String corpo = String.format(
+                        "Olá, %s!\n\n"
+                        + "%s\n\n"
+                        + "Resumo do Chamado:\n"
+                        + "• Protocolo: %s\n"
+                        + "• Título: %s\n"
+                        + "• Setor: %s\n"
+                        + "• Status: %s\n"
+                        + "• Prioridade: %s\n\n"
+                        + "Para acompanhar ou responder a este chamado, acesse a plataforma:\n"
+                        + "https://www.thickethub.dev.br/chamados/%d\n\n"
+                        + "Atenciosamente,\n"
+                        + "Central de Atendimento ThicketHub",
+                        destino.getNome(),
+                        mensagem,
+                        chamado.getProtocolo(),
+                        chamado.getTitulo(),
+                        chamado.getSetor(),
+                        chamado.getStatus(),
+                        chamado.getPrioridade(),
+                        chamado.getId()
+                );
+                emailService.enviarEmail(destino.getEmail(), assunto, corpo);
+            }
         } catch (Exception e) {
-            log.warn("Falha ao enviar notificaÃ§Ã£o de chamado: {}", e.getMessage());
+            log.warn("Falha ao enviar notificação de chamado: {}", e.getMessage());
         }
     }
 

@@ -18,6 +18,7 @@ import thickethub.exception.ConflictException;
 import thickethub.exception.ResourceNotFoundException;
 import thickethub.repository.ConfigDominioRepository;
 import thickethub.repository.ConfiguracaoSistemaRepository;
+import thickethub.service.EmailService;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -40,6 +41,7 @@ public class ConfiguracaoController {
     private final ConfigDominioRepository configDominioRepository;
     private final ConfiguracaoSistemaRepository configuracaoSistemaRepository;
     private final ObjectMapper objectMapper;
+    private final EmailService emailService;
 
     // Chaves usadas na tabela tb_configuracao_sistema
     private static final String CHAVE_LDAP  = "ldap";
@@ -294,12 +296,32 @@ public class ConfiguracaoController {
     @PostMapping("/email/testar")
     public ResponseEntity<ApiResponse<Map<String, Object>>> testarEmail(
             @RequestBody Map<String, Object> req) {
-        String dest = String.valueOf(req.getOrDefault("destinatario", "teste@thickethub.dev.br"));
-        Map<String, Object> res = Map.of(
-                "sucesso", true,
-                "mensagem", "E-mail de teste enviado com sucesso para: " + dest
+        String dest = String.valueOf(req.getOrDefault("destinatario", ""));
+        if (dest == null || dest.isBlank() || "null".equals(dest)) {
+            dest = "contato@thickethub.dev.br";
+        }
+        
+        boolean enviado = emailService.enviarEmailSincrono(
+                dest,
+                "[ThicketHub] Teste de Envio SMTP (Resend)",
+                "Olá!\n\nEste é um e-mail de teste disparado pelo painel administrativo do ThicketHub.\n"
+                + "Se você está lendo esta mensagem, o serviço de envio via Resend (SMTP/API) está configurado e funcionando 100% com sucesso!\n\n"
+                + "Equipe ThicketHub"
         );
-        return ResponseEntity.ok(ApiResponse.sucesso(res, "Teste de envio de e-mail concluído", 200));
+
+        if (enviado) {
+            Map<String, Object> res = Map.of(
+                    "sucesso", true,
+                    "mensagem", "E-mail de teste enviado com sucesso para: " + dest
+            );
+            return ResponseEntity.ok(ApiResponse.sucesso(res, "Teste de envio de e-mail concluído com sucesso", 200));
+        } else {
+            Map<String, Object> res = Map.of(
+                    "sucesso", false,
+                    "mensagem", "Falha ao enviar e-mail de teste para " + dest + ". Verifique as credenciais no painel da Resend."
+            );
+            return ResponseEntity.badRequest().body(ApiResponse.erro("Falha no envio de e-mail para " + dest, List.of("Verifique as credenciais no painel da Resend"), 400));
+        }
     }
 
     // ---------------------------------------------------------------------------
