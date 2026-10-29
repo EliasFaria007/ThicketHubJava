@@ -95,6 +95,13 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
+        <!-- AWS S3 SDK (Compatível com Cloudflare R2) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.29.50</version>
+        </dependency>
+
         <!-- Swagger OpenAPI & Observabilidade -->
         <dependency>
             <groupId>org.springdoc</groupId>
