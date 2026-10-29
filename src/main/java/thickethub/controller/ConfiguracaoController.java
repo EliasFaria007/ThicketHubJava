@@ -194,18 +194,15 @@ public class ConfiguracaoController {
     public ResponseEntity<ApiResponse<ConfigDominiosResponse>> criarDominio(
             @Valid @RequestBody ConfigDominiosRequest req) {
 
-        if (configDominioRepository.findByDominio(req.getDominio()).isPresent()) {
-            throw new ConflictException("Domínio '" + req.getDominio() + "' já está cadastrado.");
+        if (configDominioRepository.findByDominio(req.dominio()).isPresent()) {
+            throw new ConflictException("Domínio '" + req.dominio() + "' já está cadastrado.");
         }
         ConfigDominio novo = new ConfigDominio();
-        novo.setDominio(req.getDominio());
-        novo.setEhPadrao(Boolean.TRUE.equals(req.getEhPadrao()));
+        novo.setDominio(req.dominio());
+        novo.setEhPadrao(Boolean.TRUE.equals(req.ehPadrao()));
         ConfigDominio salvo = configDominioRepository.save(novo);
 
-        ConfigDominiosResponse res = new ConfigDominiosResponse();
-        res.setId(salvo.getId());
-        res.setDominio(salvo.getDominio());
-        res.setEhPadrao(salvo.getEhPadrao());
+        ConfigDominiosResponse res = ConfigDominiosResponse.de(salvo);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.sucesso(res, "Domínio criado com sucesso", 201));
     }

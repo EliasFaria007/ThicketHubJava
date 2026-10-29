@@ -11,6 +11,7 @@ import thickethub.domain.model.Chamado;
 import thickethub.domain.model.HistoricoChamado;
 import thickethub.repository.ChamadoRepository;
 import thickethub.repository.HistoricoRepository;
+import thickethub.service.ConfiguracaoGeralService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,6 +23,7 @@ public class FechamentoInatividadeScheduler {
 
     private final ChamadoRepository chamadoRepository;
     private final HistoricoRepository historicoRepository;
+    private final ConfiguracaoGeralService configuracaoGeralService;
 
     /**
      * Roda a cada 1 hora verificando chamados resolvidos que ultrapassaram o tempo limite de inatividade.
@@ -31,11 +33,10 @@ public class FechamentoInatividadeScheduler {
     @Transactional
     public void fecharChamadosResolvidosPorInatividade() {
         try {
-            boolean ativo = Boolean.TRUE.equals(thickethub.controller.ConfiguracaoController.GERAL_CONFIG.get("fechamentoInatividadeAtivo"));
+            boolean ativo = configuracaoGeralService.getBoolean("fechamentoInatividadeAtivo", true);
             if (!ativo) return;
 
-            Object diasObj = thickethub.controller.ConfiguracaoController.GERAL_CONFIG.getOrDefault("diasInatividadeFechamento", 5);
-            int dias = diasObj instanceof Number ? ((Number) diasObj).intValue() : 5;
+            int dias = configuracaoGeralService.getInt("diasInatividadeFechamento", 5);
             if (dias <= 0) dias = 5;
 
             LocalDateTime limite = LocalDateTime.now().minusDays(dias);

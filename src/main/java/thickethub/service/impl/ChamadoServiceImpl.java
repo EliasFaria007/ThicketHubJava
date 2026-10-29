@@ -1,4 +1,4 @@
-package thickethub.service.impl;
+﻿package thickethub.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +23,7 @@ import thickethub.repository.*;
 import thickethub.repository.specification.ChamadoSpecification;
 import thickethub.security.SecurityUtils;
 import thickethub.service.ChamadoService;
+import thickethub.service.ConfiguracaoGeralService;
 
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -48,6 +49,7 @@ public class ChamadoServiceImpl implements ChamadoService {
     private final NotificacaoRepository notificacaoRepository;
     private final UsuarioRepository usuarioRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final ConfiguracaoGeralService configuracaoGeralService;
 
     private static final DateTimeFormatter PROTOCOLO_DATA = DateTimeFormatter.ofPattern("MMdd");
 
@@ -58,7 +60,7 @@ public class ChamadoServiceImpl implements ChamadoService {
     @Transactional
     public ChamadoDetalheResponse criarChamado(Usuario solicitante, NovoChamadoRequest request) {
         Servico servico = servicoRepository.findById(request.servicoId())
-                .orElseThrow(() -> new ResourceNotFoundException("Serviço não encontrado com ID: " + request.servicoId()));
+                .orElseThrow(() -> new ResourceNotFoundException("ServiÃ§o nÃ£o encontrado com ID: " + request.servicoId()));
 
         PrioridadeChamado prioridade = servico.getPrioridadePadrao();
 
@@ -121,12 +123,12 @@ public class ChamadoServiceImpl implements ChamadoService {
     @Transactional(readOnly = true)
     public ChamadoDetalheResponse buscarPorProtocolo(String protocolo) {
         Chamado chamado = chamadoRepository.findByProtocolo(protocolo)
-                .orElseThrow(() -> new ResourceNotFoundException("Chamado não encontrado com protocolo: " + protocolo));
+                .orElseThrow(() -> new ResourceNotFoundException("Chamado nÃ£o encontrado com protocolo: " + protocolo));
         return ChamadoDetalheResponse.de(chamado);
     }
 
     // ============================================================
-    // listar() com Specification e paginação
+    // listar() com Specification e paginaÃ§Ã£o
     // ============================================================
     @Override
     @Transactional(readOnly = true)
@@ -201,7 +203,7 @@ public class ChamadoServiceImpl implements ChamadoService {
     @Override
     @Transactional
     public ChamadoDetalheResponse assumirChamado(Usuario tecnico, Long chamadoId) {
-        log.info("[CHAMADO ASSUMIR] Técnico '{}' (id={}) tentando assumir chamado id={}",
+        log.info("[CHAMADO ASSUMIR] TÃ©cnico '{}' (id={}) tentando assumir chamado id={}",
                 tecnico.getNome(), tecnico.getId(), chamadoId);
 
         Chamado chamado = buscarOuFalhar(chamadoId);
@@ -209,15 +211,15 @@ public class ChamadoServiceImpl implements ChamadoService {
 
         if (chamado.getTecnico() != null) {
             String nomeTecnico = chamado.getTecnico().getNome();
-            log.warn("[CHAMADO ASSUMIR] Chamado '{}' já está atribuído ao técnico '{}'",
+            log.warn("[CHAMADO ASSUMIR] Chamado '{}' jÃ¡ estÃ¡ atribuÃ­do ao tÃ©cnico '{}'",
                     chamado.getProtocolo(), nomeTecnico);
-            String msg = "Chamado assumido pelo técnico: " + nomeTecnico;
+            String msg = "Chamado assumido pelo tÃ©cnico: " + nomeTecnico;
             notificarUsuario(tecnico, chamado, msg);
             throw new ConflictException(msg);
         }
         if (chamado.getStatus() != StatusChamado.ABERTO && chamado.getStatus() != StatusChamado.AGUARDANDO) {
-            log.warn("[CHAMADO ASSUMIR] Status inválido — chamado '{}' está como {}", chamado.getProtocolo(), chamado.getStatus());
-            throw new BusinessException("Só é possível assumir chamados com status ABERTO ou AGUARDANDO.");
+            log.warn("[CHAMADO ASSUMIR] Status invÃ¡lido â€” chamado '{}' estÃ¡ como {}", chamado.getProtocolo(), chamado.getStatus());
+            throw new BusinessException("SÃ³ Ã© possÃ­vel assumir chamados com status ABERTO ou AGUARDANDO.");
         }
 
         chamado.setTecnico(tecnico);
@@ -230,11 +232,11 @@ public class ChamadoServiceImpl implements ChamadoService {
         chamado.setSlaRodandoDesde(LocalDateTime.now());
         chamadoRepository.save(chamado);
 
-        registrarHistorico(chamado, tecnico, TipoHistorico.ASSUNCAO, "Chamado assumido pelo técnico " + tecnico.getNome());
+        registrarHistorico(chamado, tecnico, TipoHistorico.ASSUNCAO, "Chamado assumido pelo tÃ©cnico " + tecnico.getNome());
         auditar(tecnico, "chamado.assumir", "protocolo=" + chamado.getProtocolo());
         notificarUsuario(chamado.getSolicitante(), chamado, "Seu chamado " + chamado.getProtocolo() + " foi assumido por " + tecnico.getNome());
 
-        log.info("[CHAMADO ASSUMIR] SUCESSO — chamado '{}' assumido pelo técnico '{}' (id={})",
+        log.info("[CHAMADO ASSUMIR] SUCESSO â€” chamado '{}' assumido pelo tÃ©cnico '{}' (id={})",
                 chamado.getProtocolo(), tecnico.getNome(), tecnico.getId());
         return ChamadoDetalheResponse.de(chamado);
     }
@@ -249,14 +251,14 @@ public class ChamadoServiceImpl implements ChamadoService {
         validarTecnicoDoSetor(user, chamado);
 
         if (chamado.getStatus() == StatusChamado.PAUSADO) {
-            throw new BusinessException("Chamado já está pausado.");
+            throw new BusinessException("Chamado jÃ¡ estÃ¡ pausado.");
         }
 
         congelarSla(chamado);
         chamado.setStatus(StatusChamado.PAUSADO);
         chamadoRepository.save(chamado);
 
-        registrarHistorico(chamado, user, TipoHistorico.PAUSA, "Chamado pausado — SLA congelado");
+        registrarHistorico(chamado, user, TipoHistorico.PAUSA, "Chamado pausado â€” SLA congelado");
         auditar(user, "chamado.pausar", "protocolo=" + chamado.getProtocolo());
         notificarUsuario(chamado.getSolicitante(), chamado,
                 "O atendimento do chamado " + chamado.getProtocolo() + " foi pausado por " + user.getNome());
@@ -271,14 +273,14 @@ public class ChamadoServiceImpl implements ChamadoService {
         validarTecnicoDoSetor(user, chamado);
 
         if (chamado.getStatus() != StatusChamado.PAUSADO) {
-            throw new BusinessException("Só é possível retomar chamados pausados.");
+            throw new BusinessException("SÃ³ Ã© possÃ­vel retomar chamados pausados.");
         }
 
         chamado.setStatus(StatusChamado.EM_ATENDIMENTO);
         chamado.setSlaRodandoDesde(LocalDateTime.now());
         chamadoRepository.save(chamado);
 
-        registrarHistorico(chamado, user, TipoHistorico.RETOMADA, "Chamado retomado — SLA reativado");
+        registrarHistorico(chamado, user, TipoHistorico.RETOMADA, "Chamado retomado â€” SLA reativado");
         auditar(user, "chamado.retomar", "protocolo=" + chamado.getProtocolo());
         notificarUsuario(chamado.getSolicitante(), chamado,
                 "O atendimento do chamado " + chamado.getProtocolo() + " foi retomado por " + user.getNome());
@@ -292,14 +294,14 @@ public class ChamadoServiceImpl implements ChamadoService {
     @Override
     @Transactional
     public ChamadoDetalheResponse resolverChamado(Usuario user, Long chamadoId, ResolverChamadoRequest request) {
-        log.info("[CHAMADO RESOLVER] Técnico '{}' resolvendo chamado id={}", user.getNome(), chamadoId);
+        log.info("[CHAMADO RESOLVER] TÃ©cnico '{}' resolvendo chamado id={}", user.getNome(), chamadoId);
 
         Chamado chamado = buscarOuFalhar(chamadoId);
         validarTecnicoDoSetor(user, chamado);
 
         if (request == null || request.oQueFoiFeito() == null || request.oQueFoiFeito().isBlank()) {
             log.warn("[CHAMADO RESOLVER] Tentativa de resolver chamado '{}' sem informar o que foi feito", chamado.getProtocolo());
-            throw new BusinessException("É obrigatório registrar o que foi feito para resolver o chamado.");
+            throw new BusinessException("Ã‰ obrigatÃ³rio registrar o que foi feito para resolver o chamado.");
         }
 
         congelarSla(chamado);
@@ -312,7 +314,7 @@ public class ChamadoServiceImpl implements ChamadoService {
         auditar(user, "chamado.resolver", "protocolo=" + chamado.getProtocolo());
         notificarUsuario(chamado.getSolicitante(), chamado, "Seu chamado " + chamado.getProtocolo() + " foi resolvido. Avalie o atendimento.");
 
-        log.info("[CHAMADO RESOLVER] SUCESSO — chamado '{}' marcado como RESOLVIDO por '{}'",
+        log.info("[CHAMADO RESOLVER] SUCESSO â€” chamado '{}' marcado como RESOLVIDO por '{}'",
                 chamado.getProtocolo(), user.getNome());
         return ChamadoDetalheResponse.de(chamado);
     }
@@ -327,7 +329,7 @@ public class ChamadoServiceImpl implements ChamadoService {
         validarTecnicoDoSetor(user, chamado);
 
         if (chamado.getStatus() == StatusChamado.RESOLVIDO || chamado.getStatus() == StatusChamado.FECHADO) {
-            throw new BusinessException("Não é possível devolver um chamado resolvido ou fechado.");
+            throw new BusinessException("NÃ£o Ã© possÃ­vel devolver um chamado resolvido ou fechado.");
         }
 
         chamado.setTecnico(null);
@@ -361,10 +363,10 @@ public class ChamadoServiceImpl implements ChamadoService {
 
         if (request.tecnicoId() != null) {
             Usuario novoTecnico = usuarioRepository.findById(request.tecnicoId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Técnico não encontrado com ID: " + request.tecnicoId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("TÃ©cnico nÃ£o encontrado com ID: " + request.tecnicoId()));
             chamado.setTecnico(novoTecnico);
             chamado.setStatus(StatusChamado.EM_ATENDIMENTO);
-            notificarUsuario(novoTecnico, chamado, "Chamado " + chamado.getProtocolo() + " foi encaminhado para você.");
+            notificarUsuario(novoTecnico, chamado, "Chamado " + chamado.getProtocolo() + " foi encaminhado para vocÃª.");
         } else {
             chamado.setTecnico(null);
             chamado.setStatus(StatusChamado.ABERTO);
@@ -394,7 +396,7 @@ public class ChamadoServiceImpl implements ChamadoService {
         Chamado chamado = buscarOuFalhar(chamadoId);
 
         if (chamado.getStatus() != StatusChamado.RESOLVIDO && chamado.getStatus() != StatusChamado.FECHADO) {
-            throw new BusinessException("Só é possível reabrir chamados resolvidos ou fechados.");
+            throw new BusinessException("SÃ³ Ã© possÃ­vel reabrir chamados resolvidos ou fechados.");
         }
 
         String motivoFinal = (justificativa != null && !justificativa.isBlank())
@@ -431,13 +433,13 @@ public class ChamadoServiceImpl implements ChamadoService {
             throw new BusinessException("Apenas chamados resolvidos podem ser avaliados.");
         }
 
-        // Sugestão 2: Verificação de justificativa obrigatória para notas baixas (1 ou 2)
-        boolean justificativaObrigatoria = Boolean.TRUE.equals(thickethub.controller.ConfiguracaoController.GERAL_CONFIG.get("justificativaNotaBaixaObrigatoria"));
-        boolean alertaNotaBaixa = Boolean.TRUE.equals(thickethub.controller.ConfiguracaoController.GERAL_CONFIG.get("alertaNotaBaixaAtivo"));
+        // SugestÃ£o 2: VerificaÃ§Ã£o de justificativa obrigatÃ³ria para notas baixas (1 ou 2)
+        boolean justificativaObrigatoria = configuracaoGeralService.getBoolean("justificativaNotaBaixaObrigatoria", true);
+        boolean alertaNotaBaixa = configuracaoGeralService.getBoolean("alertaNotaBaixaAtivo", true);
 
         if (justificativaObrigatoria && request.nota() <= 2) {
             if (request.comentario() == null || request.comentario().trim().length() < 5) {
-                throw new BusinessException("Para avaliações com nota 1 ou 2, é obrigatório informar uma justificativa com o motivo da insatisfação.");
+                throw new BusinessException("Para avaliaÃ§Ãµes com nota 1 ou 2, Ã© obrigatÃ³rio informar uma justificativa com o motivo da insatisfaÃ§Ã£o.");
             }
         }
 
@@ -446,13 +448,13 @@ public class ChamadoServiceImpl implements ChamadoService {
         chamado.setDataFechamento(LocalDateTime.now());
         chamadoRepository.save(chamado);
 
-        String descHistorico = "Atendimento avaliado com nota " + request.nota() + (request.comentario() != null && !request.comentario().isBlank() ? " — Justificativa: " + request.comentario() : "");
+        String descHistorico = "Atendimento avaliado com nota " + request.nota() + (request.comentario() != null && !request.comentario().isBlank() ? " â€” Justificativa: " + request.comentario() : "");
         registrarHistorico(chamado, solicitante, TipoHistorico.STATUS, descHistorico);
         auditar(solicitante, "chamado.avaliar", "protocolo=" + chamado.getProtocolo() + "; nota=" + request.nota());
 
-        // Se nota baixa e alerta ativo, notifica administradores e superusuários
+        // Se nota baixa e alerta ativo, notifica administradores e superusuÃ¡rios
         if (alertaNotaBaixa && request.nota() <= 2) {
-            String msgAlerta = "ALERTA DE INSATISFAÇÃO: Chamado " + chamado.getProtocolo() + " avaliado com nota " + request.nota() + "/5 pelo solicitante " + solicitante.getNome() + (request.comentario() != null ? ". Motivo: " + request.comentario() : "");
+            String msgAlerta = "ALERTA DE INSATISFAÃ‡ÃƒO: Chamado " + chamado.getProtocolo() + " avaliado com nota " + request.nota() + "/5 pelo solicitante " + solicitante.getNome() + (request.comentario() != null ? ". Motivo: " + request.comentario() : "");
             List<Usuario> gestores = usuarioRepository.findAll().stream()
                     .filter(u -> u.getPapel() == Papel.ADMIN || u.getPapel() == Papel.SUPERUSUARIO)
                     .toList();
@@ -465,7 +467,7 @@ public class ChamadoServiceImpl implements ChamadoService {
     }
 
     // ============================================================
-    // Comentários
+    // ComentÃ¡rios
     // ============================================================
     @Override
     @Transactional
@@ -474,7 +476,7 @@ public class ChamadoServiceImpl implements ChamadoService {
 
         boolean flagInterno = Boolean.TRUE.equals(request.flagInterno());
         if (flagInterno && autor.getPapel() == Papel.USUARIO) {
-            throw new ForbiddenException("Usuários solicitantes não podem adicionar notas internas.");
+            throw new ForbiddenException("UsuÃ¡rios solicitantes nÃ£o podem adicionar notas internas.");
         }
 
         Comentario comentario = Comentario.builder()
@@ -488,23 +490,23 @@ public class ChamadoServiceImpl implements ChamadoService {
         chamado.getComentarios().add(comentario);
         comentarioRepository.save(comentario);
         registrarHistorico(chamado, autor, TipoHistorico.COMENTARIO,
-                (flagInterno ? "[Nota Interna] " : "") + "Comentário adicionado");
+                (flagInterno ? "[Nota Interna] " : "") + "ComentÃ¡rio adicionado");
 
-        // Notificar participantes da interação
+        // Notificar participantes da interaÃ§Ã£o
         if (!flagInterno) {
-            // Se quem comentou não é o solicitante, notificar o solicitante
+            // Se quem comentou nÃ£o Ã© o solicitante, notificar o solicitante
             if (chamado.getSolicitante() != null && !autor.getId().equals(chamado.getSolicitante().getId())) {
                 notificarUsuario(chamado.getSolicitante(), chamado,
                         "Nova resposta no chamado " + chamado.getProtocolo() + " por " + autor.getNome());
             }
 
-            // Se quem comentou não é o técnico atribuído (e existe técnico atribuído), notificar o técnico
+            // Se quem comentou nÃ£o Ã© o tÃ©cnico atribuÃ­do (e existe tÃ©cnico atribuÃ­do), notificar o tÃ©cnico
             if (chamado.getTecnico() != null && !autor.getId().equals(chamado.getTecnico().getId())) {
                 notificarUsuario(chamado.getTecnico(), chamado,
-                        "Novo comentário no chamado " + chamado.getProtocolo() + " por " + autor.getNome());
+                        "Novo comentÃ¡rio no chamado " + chamado.getProtocolo() + " por " + autor.getNome());
             }
         } else {
-            // Nota interna: notificar o técnico atribuído caso o autor seja diferente do técnico
+            // Nota interna: notificar o tÃ©cnico atribuÃ­do caso o autor seja diferente do tÃ©cnico
             if (chamado.getTecnico() != null && !autor.getId().equals(chamado.getTecnico().getId())) {
                 notificarUsuario(chamado.getTecnico(), chamado,
                         "Nova nota interna no chamado " + chamado.getProtocolo() + " por " + autor.getNome());
@@ -537,11 +539,11 @@ public class ChamadoServiceImpl implements ChamadoService {
         Chamado destino = buscarOuFalhar(request.chamadoDestinoId());
 
         if (origem.getId().equals(destino.getId())) {
-            throw new BusinessException("Não é possível vincular um chamado a ele mesmo.");
+            throw new BusinessException("NÃ£o Ã© possÃ­vel vincular um chamado a ele mesmo.");
         }
 
         if (chamadoVinculoRepository.existsByChamadoOrigem_IdAndChamadoDestino_Id(origem.getId(), destino.getId())) {
-            throw new ConflictException("Estes chamados já estão vinculados.");
+            throw new ConflictException("Estes chamados jÃ¡ estÃ£o vinculados.");
         }
 
         ChamadoVinculo vinculo = ChamadoVinculo.builder()
@@ -576,7 +578,7 @@ public class ChamadoServiceImpl implements ChamadoService {
     }
 
     // ============================================================
-    // Métricas
+    // MÃ©tricas
     // ============================================================
     @Override
     @Transactional(readOnly = true)
@@ -628,7 +630,7 @@ public class ChamadoServiceImpl implements ChamadoService {
 
     private Chamado buscarOuFalhar(Long id) {
         return chamadoRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Chamado não encontrado com ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Chamado nÃ£o encontrado com ID: " + id));
     }
 
     private void validarTecnicoDoSetor(Usuario user, Chamado chamado) {
@@ -636,9 +638,9 @@ public class ChamadoServiceImpl implements ChamadoService {
             return;
         }
         if (user.getPapel() != Papel.TECNICO || user.getSetoresLiberados() == null || !user.getSetoresLiberados().contains(chamado.getSetor())) {
-            log.warn("[CHAMADO PERMISSÃO] NEGADO — '{}' (papel={}) sem acesso ao setor '{}' do chamado '{}'",
+            log.warn("[CHAMADO PERMISSÃƒO] NEGADO â€” '{}' (papel={}) sem acesso ao setor '{}' do chamado '{}'",
                     user.getEmail(), user.getPapel(), chamado.getSetor(), chamado.getProtocolo());
-            throw new ForbiddenException("Você não tem permissão para atuar no setor deste chamado.");
+            throw new ForbiddenException("VocÃª nÃ£o tem permissÃ£o para atuar no setor deste chamado.");
         }
     }
 
@@ -702,7 +704,7 @@ public class ChamadoServiceImpl implements ChamadoService {
             notificacaoRepository.save(n);
             messagingTemplate.convertAndSendToUser(destino.getEmail(), "/queue/notificacoes", mensagem);
         } catch (Exception e) {
-            log.warn("Falha ao enviar notificação de chamado: {}", e.getMessage());
+            log.warn("Falha ao enviar notificaÃ§Ã£o de chamado: {}", e.getMessage());
         }
     }
 
@@ -716,13 +718,13 @@ public class ChamadoServiceImpl implements ChamadoService {
 
     private void dispararWebhookSeConfigurado(Chamado chamado) {
         try {
-            boolean ativo = Boolean.TRUE.equals(thickethub.controller.ConfiguracaoController.GERAL_CONFIG.get("webhookAtivo"));
+            boolean ativo = configuracaoGeralService.getBoolean("webhookAtivo", false);
             if (!ativo) return;
 
-            String url = (String) thickethub.controller.ConfiguracaoController.GERAL_CONFIG.get("webhookUrl");
+            String url = configuracaoGeralService.getString("webhookUrl", "");
             if (url == null || url.isBlank() || !url.startsWith("http")) return;
 
-            String nivelMinimo = (String) thickethub.controller.ConfiguracaoController.GERAL_CONFIG.getOrDefault("webhookNivelMinimo", "CRITICA");
+            String nivelMinimo = configuracaoGeralService.getString("webhookNivelMinimo", "CRITICA");
             boolean deveEnviar = "TODAS".equalsIgnoreCase(nivelMinimo)
                     || ("ALTA".equalsIgnoreCase(nivelMinimo) && (chamado.getPrioridade() == PrioridadeChamado.ALTA || chamado.getPrioridade() == PrioridadeChamado.CRITICA))
                     || ("CRITICA".equalsIgnoreCase(nivelMinimo) && chamado.getPrioridade() == PrioridadeChamado.CRITICA);
@@ -730,11 +732,11 @@ public class ChamadoServiceImpl implements ChamadoService {
             if (!deveEnviar) return;
 
             log.info("[WEBHOOK INSTITUCIONAL] Disparando alerta de prioridade {} para chamado {}", chamado.getPrioridade(), chamado.getProtocolo());
-            // Execução assíncrona ou mock de envio seguro
+            // ExecuÃ§Ã£o assÃ­ncrona ou mock de envio seguro
             java.util.concurrent.CompletableFuture.runAsync(() -> {
                 try {
                     var httpClient = java.net.http.HttpClient.newHttpClient();
-                    String json = String.format("{\"title\":\"[ALERTA %s] Novo Chamado %s\",\"text\":\"Título: %s\\nSetor: %s\\nSolicitante: %s\"}",
+                    String json = String.format("{\"title\":\"[ALERTA %s] Novo Chamado %s\",\"text\":\"TÃ­tulo: %s\\nSetor: %s\\nSolicitante: %s\"}",
                             chamado.getPrioridade(), chamado.getProtocolo(), chamado.getTitulo(), chamado.getSetor(), chamado.getSolicitante().getNome());
                     var httpRequest = java.net.http.HttpRequest.newBuilder()
                             .uri(java.net.URI.create(url))
