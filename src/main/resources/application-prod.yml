@@ -33,10 +33,11 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 2000ms
   mail:
-    host: ${MAIL_HOST:localhost}
+    host: ${MAIL_HOST:smtp.resend.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
+    username: ${MAIL_USERNAME:resend}
     password: ${MAIL_PASSWORD:}
+    from: ${MAIL_FROM:no-reply@thickethub.dev.br}
     properties:
       mail:
         smtp:

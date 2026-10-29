@@ -1,82 +1,158 @@
 package thickethub.controller;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import thickethub.domain.model.ConfigDominio;
+import thickethub.domain.model.ConfiguracaoSistema;
 import thickethub.dto.request.ConfigDominiosRequest;
 import thickethub.dto.response.ApiResponse;
 import thickethub.dto.response.ConfigDominiosResponse;
 import thickethub.exception.ConflictException;
 import thickethub.exception.ResourceNotFoundException;
 import thickethub.repository.ConfigDominioRepository;
+import thickethub.repository.ConfiguracaoSistemaRepository;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Controller responsável pelas configurações corporativas do sistema:
+ * domínios institucionais, LDAP, e-mail (SMTP) e configurações gerais.
+ * <p>
+ * As configurações LDAP, Email e Geral são persistidas no banco de dados
+ * (tabela {@code tb_configuracao_sistema}) e carregadas sob demanda.
+ */
+@Slf4j
 @RestController
 @RequestMapping("/configuracoes")
 @RequiredArgsConstructor
 public class ConfiguracaoController {
 
     private final ConfigDominioRepository configDominioRepository;
+    private final ConfiguracaoSistemaRepository configuracaoSistemaRepository;
+    private final ObjectMapper objectMapper;
 
-    // Armazenamento em memória das configurações corporativas
-    private static final Map<String, Object> LDAP_CONFIG = new ConcurrentHashMap<>(Map.ofEntries(
-            Map.entry("ativo", false),
-            Map.entry("servidor", "ad.corporativo.gov.br"),
-            Map.entry("porta", 389),
-            Map.entry("usarSsl", false),
-            Map.entry("baseDn", "dc=corporativo,dc=gov,dc=br"),
-            Map.entry("dominio", "CORP"),
-            Map.entry("usuarioBind", "svc_helpdesk@corporativo.gov.br"),
-            Map.entry("senhaBind", ""),
-            Map.entry("filtroUsuario", "(&(objectClass=user)(sAMAccountName={0}))"),
-            Map.entry("grupoTecnico", "CN=Helpdesk_Techs,OU=Groups,DC=corporativo,DC=gov,DC=br"),
-            Map.entry("grupoAdmin", "CN=IT_Admins,OU=Groups,DC=corporativo,DC=gov,DC=br"),
-            Map.entry("grupoSuper", "CN=Domain_Admins,OU=Groups,DC=corporativo,DC=gov,DC=br"),
-            Map.entry("sincronizacaoAutomatica", false),
-            Map.entry("intervaloMinutos", 60)
-    ));
+    // Chaves usadas na tabela tb_configuracao_sistema
+    private static final String CHAVE_LDAP  = "ldap";
+    private static final String CHAVE_EMAIL = "email";
+    private static final String CHAVE_GERAL = "geral";
 
-    private static final Map<String, Object> EMAIL_CONFIG = new ConcurrentHashMap<>(Map.ofEntries(
-            Map.entry("ativo", true),
-            Map.entry("servidorSmtp", "smtp.office365.com"),
-            Map.entry("portaSmtp", 587),
-            Map.entry("usarTls", true),
-            Map.entry("usuarioSmtp", "no-reply@defensoria.mg.gov.br"),
-            Map.entry("senhaSmtp", ""),
-            Map.entry("remetenteNome", "Central Institucional de Chamados"),
-            Map.entry("remetenteEmail", "no-reply@defensoria.mg.gov.br"),
-            Map.entry("mailToTicketAtivo", false),
-            Map.entry("servidorImap", "outlook.office365.com"),
-            Map.entry("portaImap", 993),
-            Map.entry("usuarioImap", "chamados@defensoria.mg.gov.br"),
-            Map.entry("senhaImap", ""),
-            Map.entry("setorPadrao", "TI")
-    ));
+    // ---------------------------------------------------------------------------
+    // Valores padrão (usados quando o banco ainda não tem o registro)
+    // ---------------------------------------------------------------------------
 
-    public static final Map<String, Object> GERAL_CONFIG = new ConcurrentHashMap<>(Map.ofEntries(
-            Map.entry("justificativaNotaBaixaObrigatoria", true),
-            Map.entry("alertaNotaBaixaAtivo", true),
-            Map.entry("fechamentoInatividadeAtivo", true),
-            Map.entry("diasInatividadeFechamento", 5),
-            Map.entry("webhookAtivo", false),
-            Map.entry("webhookUrl", "https://defensoria.webhook.office.com/webhookb2/..."),
-            Map.entry("webhookNivelMinimo", "CRITICA")
-    ));
+    private static Map<String, Object> defaultLdap() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ativo", false);
+        m.put("servidor", "ad.corporativo.gov.br");
+        m.put("porta", 389);
+        m.put("usarSsl", false);
+        m.put("baseDn", "dc=corporativo,dc=gov,dc=br");
+        m.put("dominio", "CORP");
+        m.put("usuarioBind", "svc_helpdesk@corporativo.gov.br");
+        m.put("senhaBind", "");
+        m.put("filtroUsuario", "(&(objectClass=user)(sAMAccountName={0}))");
+        m.put("grupoTecnico", "CN=Helpdesk_Techs,OU=Groups,DC=corporativo,DC=gov,DC=br");
+        m.put("grupoAdmin", "CN=IT_Admins,OU=Groups,DC=corporativo,DC=gov,DC=br");
+        m.put("grupoSuper", "CN=Domain_Admins,OU=Groups,DC=corporativo,DC=gov,DC=br");
+        m.put("sincronizacaoAutomatica", false);
+        m.put("intervaloMinutos", 60);
+        return m;
+    }
 
-    public record BatchDominiosRequest(List<String> dominios, String padrao) {}
-    public record BatchDominiosResponse(List<String> dominios, String padrao) {}
+    private static Map<String, Object> defaultEmail() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ativo", true);
+        m.put("servidorSmtp", "smtp.resend.com");
+        m.put("portaSmtp", 587);
+        m.put("usarTls", true);
+        m.put("usuarioSmtp", "resend");
+        m.put("senhaSmtp", "");
+        m.put("remetenteNome", "ThicketHub");
+        m.put("remetenteEmail", "no-reply@thickethub.dev.br");
+        m.put("mailToTicketAtivo", false);
+        m.put("servidorImap", "");
+        m.put("portaImap", 993);
+        m.put("usuarioImap", "");
+        m.put("senhaImap", "");
+        m.put("setorPadrao", "TI");
+        return m;
+    }
+
+    private static Map<String, Object> defaultGeral() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("justificativaNotaBaixaObrigatoria", true);
+        m.put("alertaNotaBaixaAtivo", true);
+        m.put("fechamentoInatividadeAtivo", true);
+        m.put("diasInatividadeFechamento", 5);
+        m.put("webhookAtivo", false);
+        m.put("webhookUrl", "");
+        m.put("webhookNivelMinimo", "CRITICA");
+        return m;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Helpers: carregar do banco e salvar no banco
+    // ---------------------------------------------------------------------------
+
+    private Map<String, Object> carregarConfig(String chave, Map<String, Object> defaults) {
+        return configuracaoSistemaRepository.findById(chave)
+                .map(cfg -> {
+                    try {
+                        Map<String, Object> mapa = objectMapper.readValue(
+                                cfg.getValor(),
+                                new TypeReference<LinkedHashMap<String, Object>>() {}
+                        );
+                        // Garante que novas chaves adicionadas nos defaults existam
+                        defaults.forEach(mapa::putIfAbsent);
+                        return mapa;
+                    } catch (Exception e) {
+                        log.warn("[CONFIGURACAO] Falha ao deserializar '{}' do banco — usando defaults. Causa: {}", chave, e.getMessage());
+                        return new LinkedHashMap<>(defaults);
+                    }
+                })
+                .orElseGet(() -> new LinkedHashMap<>(defaults));
+    }
+
+    private Map<String, Object> salvarConfig(String chave, String descricao,
+                                              Map<String, Object> novoValor,
+                                              Map<String, Object> defaults) {
+        // Mescla com os valores existentes no banco (para não perder chaves não enviadas)
+        Map<String, Object> atual = carregarConfig(chave, defaults);
+        if (novoValor != null) {
+            atual.putAll(novoValor);
+        }
+        try {
+            String json = objectMapper.writeValueAsString(atual);
+            ConfiguracaoSistema entidade = ConfiguracaoSistema.builder()
+                    .chave(chave)
+                    .valor(json)
+                    .descricao(descricao)
+                    .atualizadoEm(LocalDateTime.now())
+                    .build();
+            configuracaoSistemaRepository.save(entidade);
+            log.info("[CONFIGURACAO] Configuração '{}' salva no banco com sucesso.", chave);
+        } catch (Exception e) {
+            log.error("[CONFIGURACAO] Falha ao serializar/salvar '{}' no banco: {}", chave, e.getMessage());
+        }
+        return atual;
+    }
 
     // ---------------------------------------------------------------------------
     // Domínios Institucionais
     // ---------------------------------------------------------------------------
+
+    public record BatchDominiosRequest(List<String> dominios, String padrao) {}
+    public record BatchDominiosResponse(List<String> dominios, String padrao) {}
 
     @GetMapping("/dominios")
     public ResponseEntity<ApiResponse<Object>> listarDominios() {
@@ -88,94 +164,59 @@ public class ConfiguracaoController {
                 .findFirst()
                 .orElse(dominiosStr.isEmpty() ? "" : dominiosStr.get(0));
 
-        // Retorna formato adaptável contendo tanto lista de strings quanto detalhe
         Map<String, Object> resposta = new LinkedHashMap<>();
         resposta.put("dominios", dominiosStr);
         resposta.put("padrao", padrao);
-        resposta.put("itens", lista.stream().map(ConfigDominiosResponse::de).toList());
-
-        return ResponseEntity.ok(ApiResponse.sucesso(resposta, "Domínios listados", 200));
+        return ResponseEntity.ok(ApiResponse.sucesso(resposta, "Domínios institucionais recuperados", 200));
     }
 
-    @org.springframework.transaction.annotation.Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER')")
     @PutMapping("/dominios")
-    public ResponseEntity<ApiResponse<BatchDominiosResponse>> salvarDominiosBatch(@RequestBody BatchDominiosRequest req) {
-        if (req != null && req.dominios() != null && !req.dominios().isEmpty()) {
-            List<String> listaLimpa = req.dominios().stream()
-                    .map(d -> d.trim().toLowerCase().replace("@", ""))
-                    .filter(d -> !d.isBlank())
-                    .distinct()
-                    .toList();
-
-            String padraoLimpo = req.padrao() != null ? req.padrao().trim().toLowerCase().replace("@", "") : "";
-            if (padraoLimpo.isBlank() || !listaLimpa.contains(padraoLimpo)) {
-                padraoLimpo = listaLimpa.isEmpty() ? "" : listaLimpa.get(0);
-            }
-
-            // Remove os que não estão mais na lista enviada
-            List<ConfigDominio> existentes = configDominioRepository.findAll();
-            for (ConfigDominio c : existentes) {
-                if (!listaLimpa.contains(c.getDominio().toLowerCase())) {
-                    configDominioRepository.delete(c);
-                }
-            }
-
-            // Atualiza ou insere
-            for (String limpo : listaLimpa) {
-                boolean ehPadrao = limpo.equalsIgnoreCase(padraoLimpo);
-                ConfigDominio cd = configDominioRepository.findByDominio(limpo).orElse(null);
-                if (cd == null) {
-                    cd = ConfigDominio.builder()
-                            .dominio(limpo)
-                            .ehPadrao(ehPadrao)
-                            .ativo(true)
-                            .build();
-                } else {
-                    cd.setEhPadrao(ehPadrao);
-                    cd.setAtivo(true);
-                }
-                configDominioRepository.save(cd);
-            }
+    public ResponseEntity<ApiResponse<Object>> salvarDominios(@RequestBody BatchDominiosRequest req) {
+        configDominioRepository.deleteAll();
+        List<ConfigDominio> novos = new ArrayList<>();
+        for (String d : req.dominios()) {
+            ConfigDominio c = new ConfigDominio();
+            c.setDominio(d);
+            c.setEhPadrao(d.equalsIgnoreCase(req.padrao()));
+            novos.add(c);
         }
+        configDominioRepository.saveAll(novos);
 
-        List<ConfigDominio> atualizados = configDominioRepository.findAll();
-        List<String> dominiosStr = atualizados.stream().map(ConfigDominio::getDominio).toList();
-        String padrao = atualizados.stream()
-                .filter(c -> Boolean.TRUE.equals(c.getEhPadrao()))
-                .map(ConfigDominio::getDominio)
-                .findFirst()
-                .orElse(dominiosStr.isEmpty() ? "" : dominiosStr.get(0));
-
-        return ResponseEntity.ok(ApiResponse.sucesso(new BatchDominiosResponse(dominiosStr, padrao), "Domínios atualizados com sucesso", 200));
+        Map<String, Object> resposta = new LinkedHashMap<>();
+        resposta.put("dominios", req.dominios());
+        resposta.put("padrao", req.padrao());
+        return ResponseEntity.ok(ApiResponse.sucesso(resposta, "Domínios institucionais salvos", 200));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER')")
     @PostMapping("/dominios")
-    public ResponseEntity<ApiResponse<ConfigDominiosResponse>> adicionarDominio(@Valid @RequestBody ConfigDominiosRequest request) {
-        if (configDominioRepository.existsByDominio(request.dominio())) {
-            throw new ConflictException("Domínio já cadastrado: " + request.dominio());
+    public ResponseEntity<ApiResponse<ConfigDominiosResponse>> criarDominio(
+            @Valid @RequestBody ConfigDominiosRequest req) {
+
+        if (configDominioRepository.findByDominio(req.getDominio()).isPresent()) {
+            throw new ConflictException("Domínio '" + req.getDominio() + "' já está cadastrado.");
         }
+        ConfigDominio novo = new ConfigDominio();
+        novo.setDominio(req.getDominio());
+        novo.setEhPadrao(Boolean.TRUE.equals(req.getEhPadrao()));
+        ConfigDominio salvo = configDominioRepository.save(novo);
 
-        ConfigDominio cd = ConfigDominio.builder()
-                .dominio(request.dominio().toLowerCase().trim().replace("@", ""))
-                .ehPadrao(Boolean.TRUE.equals(request.ehPadrao()))
-                .ativo(request.ativo() != null ? request.ativo() : true)
-                .build();
-
-        configDominioRepository.save(cd);
+        ConfigDominiosResponse res = new ConfigDominiosResponse();
+        res.setId(salvo.getId());
+        res.setDominio(salvo.getDominio());
+        res.setEhPadrao(salvo.getEhPadrao());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.sucesso(ConfigDominiosResponse.de(cd), "Domínio cadastrado", 201));
+                .body(ApiResponse.sucesso(res, "Domínio criado com sucesso", 201));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER')")
     @DeleteMapping("/dominios/{id}")
-    public ResponseEntity<ApiResponse<Void>> removerDominio(@PathVariable Long id) {
-        ConfigDominio cd = configDominioRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Domínio não encontrado com ID: " + id));
-
-        configDominioRepository.delete(cd);
-        return ResponseEntity.ok(ApiResponse.sucesso(null, "Domínio removido", 200));
+    public ResponseEntity<ApiResponse<Void>> excluirDominio(@PathVariable Long id) {
+        ConfigDominio c = configDominioRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Domínio não encontrado: " + id));
+        configDominioRepository.delete(c);
+        return ResponseEntity.ok(ApiResponse.sucesso(null, "Domínio excluído com sucesso", 200));
     }
 
     // ---------------------------------------------------------------------------
@@ -185,21 +226,22 @@ public class ConfiguracaoController {
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER')")
     @GetMapping("/ldap")
     public ResponseEntity<ApiResponse<Map<String, Object>>> obterLdap() {
-        return ResponseEntity.ok(ApiResponse.sucesso(new LinkedHashMap<>(LDAP_CONFIG), "Configuração LDAP recuperada", 200));
+        Map<String, Object> config = carregarConfig(CHAVE_LDAP, defaultLdap());
+        return ResponseEntity.ok(ApiResponse.sucesso(config, "Configuração LDAP recuperada", 200));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER')")
     @PutMapping("/ldap")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> salvarLdap(@RequestBody Map<String, Object> req) {
-        if (req != null) {
-            LDAP_CONFIG.putAll(req);
-        }
-        return ResponseEntity.ok(ApiResponse.sucesso(new LinkedHashMap<>(LDAP_CONFIG), "Configuração LDAP salva", 200));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> salvarLdap(
+            @RequestBody Map<String, Object> req) {
+        Map<String, Object> config = salvarConfig(CHAVE_LDAP, "Configuração LDAP / Active Directory", req, defaultLdap());
+        return ResponseEntity.ok(ApiResponse.sucesso(config, "Configuração LDAP salva", 200));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER')")
     @PostMapping("/ldap/testar")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> testarLdap(@RequestBody(required = false) Map<String, Object> req) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testarLdap(
+            @RequestBody(required = false) Map<String, Object> req) {
         Map<String, Object> detalhes = Map.of(
                 "servidorAcessivel", true,
                 "bindAutenticado", true,
@@ -218,8 +260,12 @@ public class ConfiguracaoController {
     @PostMapping("/ldap/sincronizar")
     public ResponseEntity<ApiResponse<Map<String, Object>>> sincronizarLdap() {
         String agora = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
-        LDAP_CONFIG.put("ultimaSincronizacaoEm", agora);
-        LDAP_CONFIG.put("totalUsuariosSincronizados", 142);
+
+        // Persiste os metadados de sincronização na config LDAP
+        Map<String, Object> extras = new LinkedHashMap<>();
+        extras.put("ultimaSincronizacaoEm", agora);
+        extras.put("totalUsuariosSincronizados", 142);
+        salvarConfig(CHAVE_LDAP, "Configuração LDAP / Active Directory", extras, defaultLdap());
 
         Map<String, Object> res = Map.of(
                 "totalSincronizados", 142,
@@ -235,56 +281,59 @@ public class ConfiguracaoController {
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER')")
     @GetMapping("/email")
     public ResponseEntity<ApiResponse<Map<String, Object>>> obterEmail() {
-        return ResponseEntity.ok(ApiResponse.sucesso(new LinkedHashMap<>(EMAIL_CONFIG), "Configuração de e-mail recuperada", 200));
+        Map<String, Object> config = carregarConfig(CHAVE_EMAIL, defaultEmail());
+        return ResponseEntity.ok(ApiResponse.sucesso(config, "Configuração de e-mail recuperada", 200));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER')")
     @PutMapping("/email")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> salvarEmail(@RequestBody Map<String, Object> req) {
-        if (req != null) {
-            EMAIL_CONFIG.putAll(req);
-        }
-        return ResponseEntity.ok(ApiResponse.sucesso(new LinkedHashMap<>(EMAIL_CONFIG), "Configuração de e-mail salva", 200));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> salvarEmail(
+            @RequestBody Map<String, Object> req) {
+        Map<String, Object> config = salvarConfig(CHAVE_EMAIL, "Configuração de e-mail SMTP", req, defaultEmail());
+        return ResponseEntity.ok(ApiResponse.sucesso(config, "Configuração de e-mail salva", 200));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER')")
     @PostMapping("/email/testar")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> testarEmail(@RequestBody Map<String, Object> req) {
-        String dest = String.valueOf(req.getOrDefault("destinatario", "teste@defensoria.mg.gov.br"));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testarEmail(
+            @RequestBody Map<String, Object> req) {
+        String dest = String.valueOf(req.getOrDefault("destinatario", "teste@thickethub.dev.br"));
         Map<String, Object> res = Map.of(
                 "sucesso", true,
-                "mensagem", "E-mail de teste institucional enviado com sucesso para: " + dest
+                "mensagem", "E-mail de teste enviado com sucesso para: " + dest
         );
         return ResponseEntity.ok(ApiResponse.sucesso(res, "Teste de envio de e-mail concluído", 200));
     }
 
     // ---------------------------------------------------------------------------
-    // Configurações Gerais Institucionais (Pesquisa de Satisfação, Automação & Webhooks)
+    // Configurações Gerais Institucionais
     // ---------------------------------------------------------------------------
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERUSUARIO', 'SUPER')")
     @GetMapping("/geral")
     public ResponseEntity<ApiResponse<Map<String, Object>>> obterGeral() {
-        return ResponseEntity.ok(ApiResponse.sucesso(new LinkedHashMap<>(GERAL_CONFIG), "Configurações institucionais recuperadas", 200));
+        Map<String, Object> config = carregarConfig(CHAVE_GERAL, defaultGeral());
+        return ResponseEntity.ok(ApiResponse.sucesso(config, "Configurações institucionais recuperadas", 200));
     }
 
     @PreAuthorize("hasRole('SUPERUSUARIO')")
     @PutMapping("/geral")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> salvarGeral(@RequestBody Map<String, Object> req) {
-        if (req != null) {
-            GERAL_CONFIG.putAll(req);
-        }
-        return ResponseEntity.ok(ApiResponse.sucesso(new LinkedHashMap<>(GERAL_CONFIG), "Configurações institucionais salvas", 200));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> salvarGeral(
+            @RequestBody Map<String, Object> req) {
+        Map<String, Object> config = salvarConfig(CHAVE_GERAL, "Configurações gerais do sistema", req, defaultGeral());
+        return ResponseEntity.ok(ApiResponse.sucesso(config, "Configurações institucionais salvas", 200));
     }
 
     @PreAuthorize("hasRole('SUPERUSUARIO')")
     @PostMapping("/geral/webhook/testar")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> testarWebhook(@RequestBody Map<String, Object> req) {
-        String url = String.valueOf(req.getOrDefault("webhookUrl", GERAL_CONFIG.get("webhookUrl")));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testarWebhook(
+            @RequestBody Map<String, Object> req) {
+        Map<String, Object> geralAtual = carregarConfig(CHAVE_GERAL, defaultGeral());
+        String url = String.valueOf(req.getOrDefault("webhookUrl", geralAtual.get("webhookUrl")));
         Map<String, Object> res = Map.of(
                 "sucesso", true,
-                "mensagem", "Notificação de teste institucional enviada com sucesso para: " + url
+                "mensagem", "Notificação de teste enviada com sucesso para: " + url
         );
-        return ResponseEntity.ok(ApiResponse.sucesso(res, "Teste de Webhook institucional concluído", 200));
+        return ResponseEntity.ok(ApiResponse.sucesso(res, "Teste de Webhook concluído", 200));
     }
 }
