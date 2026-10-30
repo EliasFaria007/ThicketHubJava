@@ -47,11 +47,11 @@ spring:
 
 storage:
   r2:
-    endpoint: ${R2_ENDPOINT}
-    access-key: ${R2_ACCESS_KEY}
-    secret-key: ${R2_SECRET_KEY}
+    endpoint: ${R2_ENDPOINT:https://c9b9b0451c30540f46252204286bb023.r2.cloudflarestorage.com}
+    access-key: ${R2_ACCESS_KEY:8f9ff996ed8193429128b13467a393e7}
+    secret-key: ${R2_SECRET_KEY:4f07b41d88396ab22220cd79b588b71a9d4d7bba8966c908eff7c61b9b0dafa6}
     bucket-name: ${R2_BUCKET_NAME:thickethub-arquivos}
-    public-url: ${R2_PUBLIC_URL}
+    public-url: ${R2_PUBLIC_URL:https://pub-93c86b28bf944ce1a4813316cada32ba.r2.dev}
 
 management:
   endpoints:
