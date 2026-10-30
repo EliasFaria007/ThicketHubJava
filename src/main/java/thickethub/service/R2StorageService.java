@@ -71,6 +71,44 @@ public class R2StorageService {
      *
      * @param urlPublica URL pública do arquivo a ser removido
      */
+    /**
+     * Faz upload de bytes brutos para o Cloudflare R2 (usado por anexos de e-mail inbound).
+     *
+     * @param bytes        Conteúdo binário do arquivo
+     * @param nomeOriginal Nome original do arquivo (para obter a extensão correta)
+     * @param contentType  MIME type do arquivo
+     * @param pasta        Pasta/prefixo dentro do bucket (ex: "anexos")
+     * @return URL pública do arquivo armazenado ou null se houver falha
+     */
+    public String uploadBytes(byte[] bytes, String nomeOriginal, String contentType, String pasta) {
+        try {
+            if (s3Client == null || bucketName == null || bucketName.isBlank()) {
+                log.warn("[R2 STORAGE] Cliente S3 não inicializado ou bucket ausente");
+                return null;
+            }
+            String extensao = obterExtensao(nomeOriginal != null ? nomeOriginal : "arquivo.png");
+            String chaveUnica = pasta + "/" + UUID.randomUUID() + extensao;
+
+            PutObjectRequest putRequest = PutObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(chaveUnica)
+                    .contentType(contentType != null ? contentType : "application/octet-stream")
+                    .contentLength((long) bytes.length)
+                    .build();
+
+            s3Client.putObject(putRequest, RequestBody.fromBytes(bytes));
+
+            String urlPublica = (publicUrl != null && !publicUrl.isBlank())
+                    ? (publicUrl.endsWith("/") ? publicUrl + chaveUnica : publicUrl + "/" + chaveUnica)
+                    : chaveUnica;
+            log.info("[R2 STORAGE] Upload de bytes concluído: {}", urlPublica);
+            return urlPublica;
+        } catch (Exception e) {
+            log.warn("[R2 STORAGE] Falha ao fazer upload de bytes para R2: {}", e.getMessage());
+            return null;
+        }
+    }
+
     public void deletarArquivo(String urlPublica) {
         if (urlPublica == null || !urlPublica.startsWith(publicUrl)) {
             log.warn("[R2 STORAGE] URL inválida para remoção: {}", urlPublica);
