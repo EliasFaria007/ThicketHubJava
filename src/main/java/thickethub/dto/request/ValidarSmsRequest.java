@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record ValidarSmsRequest(
-        @NotBlank String telefone,
+        String telefone,
+        String email,
         @NotBlank @Size(min = 4, max = 10) String codigo
 ) {}

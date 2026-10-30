@@ -48,9 +48,9 @@ public class AuthController {
     }
 
     @PostMapping("/recuperacao-sms/solicitar")
-    public ResponseEntity<ApiResponse<Void>> solicitarSms(@Valid @RequestBody SolicitarSmsRequest request) {
-        authService.solicitarRecuperacaoSms(request);
-        return ResponseEntity.ok(ApiResponse.sucesso(null, "Se o telefone estiver cadastrado, o código será enviado.", 200));
+    public ResponseEntity<ApiResponse<thickethub.dto.response.SolicitarSmsResponse>> solicitarSms(@Valid @RequestBody SolicitarSmsRequest request) {
+        thickethub.dto.response.SolicitarSmsResponse response = authService.solicitarRecuperacaoSms(request);
+        return ResponseEntity.ok(ApiResponse.sucesso(response, "Se o usuário estiver cadastrado, o código será enviado.", 200));
     }
 
     @PostMapping("/recuperacao-sms/validar")

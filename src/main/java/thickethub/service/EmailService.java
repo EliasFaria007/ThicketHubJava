@@ -17,4 +17,11 @@ public interface EmailService {
             Long chamadoId,
             String mensagemDestaque
     );
+
+    void enviarCodigoRecuperacao(
+            String destinatario,
+            String nomeDestinatario,
+            String codigoOtp,
+            int minutosValidade
+    );
 }

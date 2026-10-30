@@ -174,4 +174,22 @@ public class EmailServiceImpl implements EmailService {
                    .replace("\r", "\\r")
                    .replace("\t", "\\t");
     }
+
+    @Async("emailExecutor")
+    @Override
+    public void enviarCodigoRecuperacao(
+            String destinatario,
+            String nomeDestinatario,
+            String codigoOtp,
+            int minutosValidade
+    ) {
+        String assunto = "Código de Recuperação: " + codigoOtp + " — ThicketHub";
+        String html = EmailTemplateBuilder.gerarHtmlCodigoRecuperacao(nomeDestinatario, codigoOtp, minutosValidade);
+        String texto = "Olá " + (nomeDestinatario != null ? nomeDestinatario : "") + ",\n\n"
+                + "Seu código de recuperação ThicketHub é: " + codigoOtp + "\n"
+                + "Ele expira em " + minutosValidade + " minutos.\n\n"
+                + "Acesse: https://www.thickethub.dev.br/recuperar-senha";
+        enviarEmailHtml(destinatario, assunto, html, texto);
+    }
+
 }

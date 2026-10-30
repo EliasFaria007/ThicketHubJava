@@ -28,7 +28,9 @@ import thickethub.security.RateLimiterService;
 import thickethub.security.SecurityUtils;
 import thickethub.security.TokenBlacklistService;
 import thickethub.service.AuthService;
+import thickethub.service.EmailService;
 import thickethub.service.SmsService;
+import thickethub.dto.response.SolicitarSmsResponse;
 
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -50,6 +52,7 @@ public class AuthServiceImpl implements AuthService {
     private final TokenBlacklistService tokenBlacklistService;
     private final RateLimiterService rateLimiterService;
     private final SmsService smsService;
+    private final EmailService emailService;
     private final ConfigDominioRepository configDominioRepository;
 
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -250,52 +253,146 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public void solicitarRecuperacaoSms(SolicitarSmsRequest request) {
-        String telefone = request.telefone();
+    public SolicitarSmsResponse solicitarRecuperacaoSms(SolicitarSmsRequest request) {
+        String email = request.email() != null && !request.email().isBlank() ? request.email().trim().toLowerCase() : null;
+        String telefone = request.telefone() != null && !request.telefone().isBlank() ? request.telefone().trim() : null;
 
-        if (!rateLimiterService.permitir("sms.recuperacao:" + telefone, 3, Duration.ofHours(1))) {
-            throw new BusinessException("Limite de solicitações de SMS atingido. Aguarde 1 hora.");
+        String rateKey = email != null ? "email:" + email : "tel:" + telefone;
+        if (!rateLimiterService.permitir("recuperacao:" + rateKey, 5, Duration.ofHours(1))) {
+            throw new BusinessException("Limite de solicitações de recuperação atingido. Aguarde 1 hora.");
         }
 
-        Usuario usuario = usuarioRepository.findByTelefone(telefone)
-                .orElse(null);
+        Usuario usuario = null;
+        if (email != null) {
+            usuario = usuarioRepository.findByEmail(email).orElse(null);
+        }
+        if (usuario == null && telefone != null) {
+            usuario = usuarioRepository.findByTelefone(telefone).orElse(null);
+        }
 
-        // Não revelamos se o telefone existe (segurança anti-enumeração)
+        // Não revelamos se o usuário existe (segurança anti-enumeração)
         if (usuario == null) {
-            log.warn("Recuperação de SMS solicitada para telefone não cadastrado: {}", telefone);
-            return;
+            log.warn("[RECUPERACAO] Solicitação para usuário não cadastrado — email: '{}', tel: '{}'", email, telefone);
+            return new SolicitarSmsResponse(null, email != null ? mascararEmail(email) : null);
         }
 
         String codigoOtp = gerarOtp(6);
         String ticket = UUID.randomUUID().toString();
+        String hash = passwordEncoder.encode(codigoOtp);
+        LocalDateTime expira = LocalDateTime.now().plusMinutes(OTP_EXPIRACAO_MINUTOS);
 
-        RecuperacaoSms recuperacao = RecuperacaoSms.builder()
-                .telefone(telefone)
-                .codigoHash(passwordEncoder.encode(codigoOtp))
-                .ticketValidacao(ticket)
-                .expiraEm(LocalDateTime.now().plusMinutes(OTP_EXPIRACAO_MINUTOS))
-                .contadorTentativas(0)
-                .utilizado(false)
-                .build();
+        // Salva por e-mail para permitir validação via e-mail
+        if (usuario.getEmail() != null && !usuario.getEmail().isBlank()) {
+            recuperacaoSmsRepository.save(RecuperacaoSms.builder()
+                    .telefone(usuario.getEmail().toLowerCase())
+                    .codigoHash(hash)
+                    .ticketValidacao(ticket)
+                    .expiraEm(expira)
+                    .contadorTentativas(0)
+                    .utilizado(false)
+                    .build());
+        }
 
-        recuperacaoSmsRepository.save(recuperacao);
-        smsService.enviar(telefone, "Seu código de recuperação ThicketHub: " + codigoOtp +
-                " (válido por " + OTP_EXPIRACAO_MINUTOS + " minutos)");
+        // Salva também por telefone (caso tenha telefone) com o mesmo ticket e código
+        if (usuario.getTelefone() != null && !usuario.getTelefone().isBlank() && 
+            !usuario.getTelefone().equalsIgnoreCase(usuario.getEmail())) {
+            recuperacaoSmsRepository.save(RecuperacaoSms.builder()
+                    .telefone(usuario.getTelefone())
+                    .codigoHash(hash)
+                    .ticketValidacao(ticket + "-tel")
+                    .expiraEm(expira)
+                    .contadorTentativas(0)
+                    .utilizado(false)
+                    .build());
+        }
 
-        log.info("OTP de recuperação enviado para telefone terminando em {}",
-                telefone.substring(Math.max(0, telefone.length() - 4)));
+        // Dispara e-mail institucional corporativo com o código de verificação
+        if (usuario.getEmail() != null && !usuario.getEmail().isBlank()) {
+            try {
+                emailService.enviarCodigoRecuperacao(
+                        usuario.getEmail(),
+                        usuario.getNome(),
+                        codigoOtp,
+                        OTP_EXPIRACAO_MINUTOS
+                );
+                log.info("[RECUPERACAO] Código OTP enviado com sucesso por E-MAIL para '{}'", usuario.getEmail());
+            } catch (Exception e) {
+                log.warn("[RECUPERACAO] Falha ao enviar código por e-mail: {}", e.getMessage());
+            }
+        }
+
+        // Dispara SMS se houver telefone cadastrado
+        if (usuario.getTelefone() != null && !usuario.getTelefone().isBlank()) {
+            smsService.enviar(usuario.getTelefone(), "Seu código de recuperação ThicketHub: " + codigoOtp +
+                    " (válido por " + OTP_EXPIRACAO_MINUTOS + " minutos)");
+            log.info("[RECUPERACAO] Código OTP enviado via SMS para telefone terminando em {}",
+                    usuario.getTelefone().substring(Math.max(0, usuario.getTelefone().length() - 4)));
+        }
+
+        String telMasc = usuario.getTelefone() != null ? mascararTelefone(usuario.getTelefone()) : null;
+        String emailMasc = usuario.getEmail() != null ? mascararEmail(usuario.getEmail()) : null;
+
+        return new SolicitarSmsResponse(telMasc, emailMasc);
+    }
+
+    private String mascararEmail(String email) {
+        if (email == null || !email.contains("@")) return email;
+        String[] partes = email.split("@");
+        String nome = partes[0];
+        String dominio = partes[1];
+        if (nome.length() <= 2) {
+            return nome.charAt(0) + "***@" + dominio;
+        }
+        return nome.substring(0, 2) + "***" + nome.charAt(nome.length() - 1) + "@" + dominio;
+    }
+
+    private String mascararTelefone(String telefone) {
+        if (telefone == null || telefone.length() < 4) return telefone;
+        String ultimos4 = telefone.substring(telefone.length() - 4);
+        return "(**) *****-" + ultimos4;
     }
 
     @Override
     @Transactional
     public String validarSms(ValidarSmsRequest request) {
-        if (!rateLimiterService.permitirValidacaoOtp(request.telefone())) {
+        String chave = (request.email() != null && !request.email().isBlank()) 
+                ? request.email().trim().toLowerCase() 
+                : (request.telefone() != null ? request.telefone().trim() : null);
+
+        if (chave == null) {
+            throw new BusinessException("Informe seu e-mail ou telefone cadastrado.");
+        }
+
+        if (!rateLimiterService.permitirValidacaoOtp(chave)) {
             throw new BusinessException("Muitas tentativas de validação. Aguarde antes de tentar novamente.");
         }
 
         RecuperacaoSms recuperacao = recuperacaoSmsRepository
-                .findTopByTelefoneAndUtilizadoFalseOrderByExpiraEmDesc(request.telefone())
-                .orElseThrow(() -> new BusinessException("Nenhum código de recuperação ativo para este telefone."));
+                .findTopByTelefoneAndUtilizadoFalseOrderByExpiraEmDesc(chave)
+                .orElse(null);
+
+        // Se não achou pela chave direta, tenta achar o usuário pelo e-mail ou telefone para cruzar
+        if (recuperacao == null) {
+            Usuario u = usuarioRepository.findByEmail(chave.toLowerCase())
+                    .or(() -> usuarioRepository.findByTelefone(chave))
+                    .orElse(null);
+            if (u != null) {
+                if (u.getEmail() != null) {
+                    recuperacao = recuperacaoSmsRepository
+                            .findTopByTelefoneAndUtilizadoFalseOrderByExpiraEmDesc(u.getEmail().toLowerCase())
+                            .orElse(null);
+                }
+                if (recuperacao == null && u.getTelefone() != null) {
+                    recuperacao = recuperacaoSmsRepository
+                            .findTopByTelefoneAndUtilizadoFalseOrderByExpiraEmDesc(u.getTelefone())
+                            .orElse(null);
+                }
+            }
+        }
+
+        if (recuperacao == null) {
+            throw new BusinessException("Nenhum código de recuperação ativo para este usuário.");
+        }
 
         if (LocalDateTime.now().isAfter(recuperacao.getExpiraEm())) {
             throw new BusinessException("Código expirado. Solicite um novo código.");
@@ -315,25 +412,36 @@ public class AuthServiceImpl implements AuthService {
         recuperacao.setUtilizado(true);
         recuperacaoSmsRepository.save(recuperacao);
 
-        return recuperacao.getTicketValidacao();
+        // Retorna o ticket limpo (sem sufixo)
+        String ticket = recuperacao.getTicketValidacao();
+        return ticket.endsWith("-tel") ? ticket.substring(0, ticket.length() - 4) : ticket;
     }
 
     @Override
     @Transactional
     public void redefinirSenha(RedefinirSenhaRequest request) {
-        log.info("[REDEFINIR SENHA] Tentativa de redefinição de senha via ticket");
-        RecuperacaoSms recuperacao = recuperacaoSmsRepository
-                .findByTicketValidacaoAndUtilizadoFalse(request.ticketValidacao())
-                .orElseThrow(() -> new BusinessException("Ticket de redefinição inválido ou já utilizado."));
+        String ticket = request.ticketValidacao();
+        log.info("[REDEFINIR SENHA] Tentativa de redefinição de senha com ticket: {}", ticket);
 
-        if (LocalDateTime.now().isAfter(recuperacao.getExpiraEm())) {
-            log.warn("[REDEFINIR SENHA] Ticket expirado para telefone terminando em {}",
-                    recuperacao.getTelefone().substring(Math.max(0, recuperacao.getTelefone().length() - 4)));
-            throw new BusinessException("Ticket expirado. Solicite um novo código.");
+        RecuperacaoSms recuperacao = recuperacaoSmsRepository
+                .findByTicketValidacaoAndUtilizadoFalse(ticket)
+                .or(() -> recuperacaoSmsRepository.findByTicketValidacaoAndUtilizadoFalse(ticket + "-tel"))
+                .orElse(null);
+
+        // Se não achou como não utilizado, pode ter sido marcado como utilizado no validarSms
+        // Então busca o ticket que acabou de ser validado nos últimos 15 minutos
+        if (recuperacao == null) {
+            recuperacao = recuperacaoSmsRepository
+                    .findAll().stream()
+                    .filter(r -> (ticket.equals(r.getTicketValidacao()) || (ticket + "-tel").equals(r.getTicketValidacao()))
+                            && r.getExpiraEm().isAfter(LocalDateTime.now()))
+                    .findFirst()
+                    .orElseThrow(() -> new BusinessException("Ticket de redefinição inválido ou expirado."));
         }
 
-        // Encontrar usuário pelo telefone associado ao ticket
-        Usuario usuario = usuarioRepository.findByTelefone(recuperacao.getTelefone())
+        String identificador = recuperacao.getTelefone();
+        Usuario usuario = usuarioRepository.findByEmail(identificador.toLowerCase())
+                .or(() -> usuarioRepository.findByTelefone(identificador))
                 .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado."));
 
         usuario.setSenhaHash(passwordEncoder.encode(request.novaSenha()));
@@ -343,9 +451,9 @@ public class AuthServiceImpl implements AuthService {
         recuperacao.setUtilizado(true);
         recuperacaoSmsRepository.save(recuperacao);
 
-        auditar(usuario, "auth.redefinir_senha", "via=sms", "sistema");
-        log.info("[REDEFINIR SENHA] SUCESSO — senha redefinida via SMS para usuário id={}, nome='{}'",
-                usuario.getId(), usuario.getNome());
+        auditar(usuario, "auth.redefinir_senha", "via=recuperacao_codigo", "sistema");
+        log.info("[REDEFINIR SENHA] SUCESSO — senha redefinida com sucesso para usuário id={}, email='{}'",
+                usuario.getId(), usuario.getEmail());
     }
 
     @Override
